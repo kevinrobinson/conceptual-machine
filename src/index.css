@@ -1,0 +1,18 @@
+* {
+  font-family: Verdana;
+}
+
+
+.InspectClass {
+  margin: 20px;
+  display: inline-block;
+}
+
+.InspectExample {
+  margin: 10px;
+}
+
+.InspectExample-label {
+  font-size: 18px;
+  font-weight: bold;
+}

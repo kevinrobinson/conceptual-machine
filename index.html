@@ -1,10 +1,39 @@
 <html>
 <head>
   <title>inspectable-machine</title>
+  <link rel="stylesheet" type="text/css" href="src/index.css">
 </head>
 <body>
-  <input id="upload-file-input" type="file" name="file" />
-  <script src="vendor/jszip.min.js"></script>
-  <script src="dist/main.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.3/dist/teachablemachine-image.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.15/lodash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.2.2/dist/jszip.min.js"></script>
+
+  <h1>inspectable-machine</h1>
+  <div>
+    <h2>model</h2>
+    <input id="upload-model-zip-input" type="file" name="file" />
+  </div>
+
+  <div>
+    <h2>project</h2>
+    <input id="upload-project-zip-input" type="file" name="file" />
+    </h2>
+  </div>
+
+  <div>
+    <h2>generalization dataset</h2>
+    <input id="upload-generalization-zip-input" type="file" name="file" />
+    </h2>
+  </div>
+
+  <div>
+    <h2>inspector</h2>
+    <button id="inspect-button">inspect!</button>
+    <div id="inspection"></div>
+  </div>
+
+  <div id="log"></div>
+  <script src="src/index.js"></script>
 </body>
 </html>

@@ -1,60 +1,212 @@
-import * as tf from '@tensorflow/tfjs';
-import * as tmImage from '@teachablemachine/image';
-import _ from 'lodash';
-
-// can't get it's module and Rollbar to play nicely together
-const { JSZip } = window;
-
-const state = {
-  projectZip: null
-};
+console.log('dependencies', {JSZip, _, tmImage});
 
 
-// function refresh() {
-//   console.log('refresh', state);
-// }
+class App {
+  constructor(el, els) {
+    this.el = el;
+    this.els = els;
+    this.state = {
+      project: null,
+      model: null,
+      generalization: null
+    };
+  }
+
+  readState() {
+    return _.clone(this.state);
+  }
+
+  update(newState) {
+    this.state = {...this.state, ...newState};
+    this.render();
+  }
+
+  render() {
+    console.log('render');
+    const pre = document.createElement('pre');
+    pre.textContent = JSON.stringify(this.state).length;
+    this.els.log.appendChild(pre);
+  }
+}
+
 
 function debug(...params) {
   console.log(...params); // eslint-disable-line no-console
 }
 
+async function setImageSrc(imgEl, src) {
+  await new Promise((resolve, reject) => {
+    imgEl.onload = resolve;
+    imgEl.onerror = reject;
+    imgEl.src = src;
+  });
+}
+
+async function readBlobFromZip(zip, filename) {
+  let zipEntry = null;
+  zip.forEach((relativePath, entry) => {
+    if (entry.name === filename) {
+      zipEntry = entry;
+    }
+  });
+  if (zipEntry === null) return;
+
+  const fileData = await zipEntry.async('blob');
+  return new File([fileData], filename);
+}
+
+
+async function loadImageModelFromZipFile(modelZipFile) {
+  debug('Opening model zip...');
+  const jsZip = new JSZip();
+  const zip = await jsZip.loadAsync(modelZipFile);
+  
+  console.log('Loading model...');
+  const model = await tmImage.loadFromFiles(
+    await readBlobFromZip(zip, 'model.json'),
+    await readBlobFromZip(zip, 'weights.bin'),
+    await readBlobFromZip(zip, 'metadata.json')
+  );
+  console.log('Done.');
+  return model;
+}
+
+
+/*
+export declare interface TeachableMachineImageProject {
+  manifest: TeachableMachineImageProjectManifest
+  filesByClassName: {[className: string]: [blobUrl]}
+}
+*/
+async function loadImageProjectFromZipFile(projectZipFile) {
+  debug('Opening project zip...');
+  const jsZip = new JSZip();
+  const zip = await jsZip.loadAsync(projectZipFile);
+
+  debug('Reading manifest.json...')
+  let manifestEntry = null;
+  zip.forEach((relativePath, entry) => {
+    if (relativePath === 'manifest.json' && entry.name === 'manifest.json') {
+      manifestEntry = entry;
+    }
+  });
+  const manifest = (manifestEntry === null)
+    ? null
+    : JSON.parse(await manifestEntry.async('text'));
+  debug(manifest ? '  manifest found' : '  manifest not found');
+
+  // use a for loop for simple async/await usage
+  debug('Reading image files...');
+  const filesByClassName = {};
+  for (var i = 0; i < Object.keys(zip.files).length; i++) {
+    const relativePath = Object.keys(zip.files)[i];
+    if (relativePath === 'manifest.json') continue;
+
+    const [className, exampleNumber] = relativePath.split('-!-');
+    filesByClassName[className] || (filesByClassName[className] = []);
+    if (filesByClassName[className][exampleNumber] !== undefined) {
+      console.warn('unexpected project file format');
+    }
+
+    const entry = zip.files[relativePath];
+    const blob = await entry.async('blob');
+    const blobUrl = URL.createObjectURL(blob);
+    filesByClassName[className].push(blobUrl);
+  };
+
+  console.log('Done.');
+  return {manifest, filesByClassName};
+}
+
+async function inspect(generalization, model, inspectorEl) {
+  const project = generalization; // test against generalization
+
+  const classNames = Object.keys(project.filesByClassName);
+  await Promise.all(classNames.map(async className => {
+    // for each class in model
+    console.log('  inspect, className:', className);
+    const classEl = document.createElement('div');
+    classEl.classList.add('InspectClass');
+    const titleEl = document.createElement('div');
+    titleEl.classList.add('InspectClass-title');
+    titleEl.textContent = className;
+
+    // add all images and the model prediction for that image
+    const imageBlobUrls = project.filesByClassName[className] || [];
+    console.log('    imageBlobUrls.length', imageBlobUrls.length);
+    await Promise.all(imageBlobUrls.map(async (blobUrl, index) => {
+      const exampleEl = document.createElement('div');
+      exampleEl.classList.add('InspectExample');
+
+      console.log('    index:', index);
+      const imgEl = document.createElement('img');
+      imgEl.classList.add('InspectExample-img');
+      imgEl.title = index;
+      exampleEl.appendChild(imgEl);
+      await setImageSrc(imgEl, blobUrl); // before predicting
+
+      const labelEl = document.createElement('div');
+      labelEl.classList.add('InspectExample-label');
+      labelEl.textContent = className;
+      exampleEl.appendChild(labelEl);
+
+      // #E67701 #FFECE2 #ffffff
+      // #D84C6F #FFE9EC #ffffff
+      imgEl.classList.add('InspectExample-prediction');
+      const predictionEl = document.createElement('div');
+      const predictions = await model.predict(imgEl);
+      const prediction = _.last(_.sortBy(predictions, 'probability'));
+      predictionEl.textContent = `model says: ${prediction.className}, ${Math.round(100*prediction.probability)}%`;
+      exampleEl.appendChild(predictionEl);
+
+      classEl.appendChild(exampleEl);
+    }));
+
+    inspectorEl.appendChild(classEl);
+  }));
+}
+
+
 async function main() {
-  document.querySelector('#upload-file-input').addEventListener('change', async e => {
+  const els = {
+    modelZipInput: document.querySelector('#upload-model-zip-input'),
+    projectZipInput: document.querySelector('#upload-project-zip-input'),
+    generalizationZipInput: document.querySelector('#upload-generalization-zip-input'),
+    inspectButton: document.querySelector('#inspect-button'),
+    log: document.querySelector('#log'),
+    inspection: document.querySelector('#inspection'),
+  }
+  const app = new App(document.body, els);
+  window.app = app; //debug
+
+
+  els.modelZipInput.addEventListener('change', async e => {
     if (e.target.files.length === 0) return;
-    const [file] = e.target.files;
-    // state.projectZip = file;
-    // refresh();
+    const [modelZip] = e.target.files;
+    const model = await loadImageModelFromZipFile(modelZip);
+    app.update({model});
+  });
+
+  els.projectZipInput.addEventListener('change', async e => {
+    if (e.target.files.length === 0) return;
+    const [projectZip] = e.target.files;
+    const project = await loadImageProjectFromZipFile(projectZip);
+    app.update({project});
+  });
+
+  els.generalizationZipInput.addEventListener('change', async e => {
+    if (e.target.files.length === 0) return;
+    const [projectZip] = e.target.files;
+    const generalization = await loadImageProjectFromZipFile(projectZip);
+    app.update({generalization});
+  });
 
 
-    const unzippedFiles = [];
-    const jsZip = new JSZip();
-    debug('Reading zip..');
-    jsZip.loadAsync(file).then((zip) => {
-      debug('reading...');
-      zip.forEach((relativePath, zipEntry) => {
-        debug('zipEntry', zipEntry);
-        unzippedFiles.push(zipEntry);
-      });
-    });
+  els.inspectButton.addEventListener('click', async e => {
+    const {model, generalization} = app.readState();
+    if (!model || !generalization) return;
 
-    console.log('wat');
-    function findZip(filename) {
-      return _.find(unzippedFiles, (zip) => zip.name === filename);
-    }
-
-    async function readJson(zip) {
-      return JSON.parse(await(zip.async('text')));
-    }
-
-    function readBinary(zip) {
-      return zip.async('blob');
-    }
-    const modelJson = await readJson(findZip('model.json'));
-    const metaDataJson = await readJson(findZip('metadata.json'));
-    const weightsBin = await readBinary(findZip('weights.bin'));
-
-    const model = await tmImage.loadFromFiles(modelJson, metaDataJson, weightsBin);
-    console.log('model', model);
+    await inspect(generalization, model, els.inspection);
   });
 }
 
