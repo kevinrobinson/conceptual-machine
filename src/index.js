@@ -25,6 +25,7 @@ async function main() {
     // state.projectZip = file;
     // refresh();
 
+
     const unzippedFiles = [];
     const jsZip = new JSZip();
     debug('Reading zip..');
@@ -36,16 +37,17 @@ async function main() {
       });
     });
 
+    console.log('wat');
     function findZip(filename) {
       return _.find(unzippedFiles, (zip) => zip.name === filename);
     }
 
     async function readJson(zip) {
-      return JSON.parse(await zip.async('text'));
+      return JSON.parse(await(zip.async('text')));
     }
 
-    async function readBinary(zip) {
-      return JSON.parse(await zip.async('blob'));
+    function readBinary(zip) {
+      return zip.async('blob');
     }
     const modelJson = await readJson(findZip('model.json'));
     const metaDataJson = await readJson(findZip('metadata.json'));

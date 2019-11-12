@@ -1,17 +1,14 @@
 {
   "scripts": {
-    "build": "webpack",
-    "start": "concurrently --kill-others \"webpack --watch\" \"serve . -l 3003\""
+    "watch": "webpack --config webpack.dev.js --watch",
+    "start": "webpack-dev-server --open"
   },
   "devDependencies": {
     "concurrently": "^5.0.0",
-    "eslint-config-rollup": "^0.1.0",
-    "parcel-bundler": "^1.12.4",
-    "rollup": "^1.27.0",
-    "rollup-plugin-node-resolve": "^5.2.0",
     "serve": "^11.2.0",
     "webpack": "^4.41.2",
-    "webpack-cli": "^3.3.10"
+    "webpack-cli": "^3.3.10",
+    "webpack-dev-server": "^3.9.0"
   },
   "dependencies": {
     "@teachablemachine/image": "^0.8.4",
