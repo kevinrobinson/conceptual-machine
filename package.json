@@ -6,6 +6,7 @@
   "devDependencies": {
     "concurrently": "^5.0.0",
     "eslint-config-rollup": "^0.1.0",
+    "parcel-bundler": "^1.12.4",
     "rollup": "^1.27.0",
     "rollup-plugin-node-resolve": "^5.2.0",
     "serve": "^11.2.0",
