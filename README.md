@@ -14,8 +14,8 @@ just early hacking so far
 ### stretching the space
 ![stretching the spaces](docs/docs-4.png)
 
-### 3d sprites are but confusing
-![3d sprites are but confusing](docs/docs-5.png)
+### 3d sprites are ooooh, but confusing
+![3d sprites are ooooh, but confusing](docs/docs-5.png)
 
 
 ## datasets
