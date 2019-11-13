@@ -2,6 +2,7 @@
 <head>
   <title>inspectable-machine</title>
   <link rel="stylesheet" type="text/css" href="src/index.css">
+  <link rel="stylesheet" type="text/css" href="src/bar-graph.css">
 </head>
 <body>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
@@ -15,14 +16,14 @@
     <input id="upload-model-zip-input" type="file" name="file" />
   </div>
 
-  <div>
+  <div style="opacity: 0.25;">
     <h2>project</h2>
     <input id="upload-project-zip-input" type="file" name="file" />
     </h2>
   </div>
 
   <div>
-    <h2>generalization dataset</h2>
+    <h2>project with generalization dataset</h2>
     <input id="upload-generalization-zip-input" type="file" name="file" />
     </h2>
   </div>
@@ -34,6 +35,12 @@
   </div>
 
   <div id="log"></div>
-  <script src="src/index.js"></script>
+  <script type="module">
+    import {create} from './src/bar-graph.js';
+    import {main} from './src/index.js';
+    main({
+      createBarGraph: create
+    });
+  </script>
 </body>
 </html>

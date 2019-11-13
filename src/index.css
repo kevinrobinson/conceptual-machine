@@ -9,10 +9,20 @@
 }
 
 .InspectExample {
-  margin: 10px;
+  margin: 20px;
+  padding: 20px;
+  border: 1px solid #f8f8f8;
 }
 
 .InspectExample-label {
   font-size: 18px;
   font-weight: bold;
+}
+
+.InspectExample-prediction-does-not-match {
+  background: rgba(255, 0, 0, 0.2);
+}
+
+.InspectExample-prediction-does-match {
+  background: rgba(0, 255, 0, 0.2);
 }

@@ -1,6 +1,5 @@
 console.log('dependencies', {JSZip, _, tmImage});
 
-
 class App {
   constructor(el, els) {
     this.el = el;
@@ -118,10 +117,14 @@ async function loadImageProjectFromZipFile(projectZipFile) {
   return {manifest, filesByClassName};
 }
 
-async function inspect(generalization, model, inspectorEl) {
+async function inspect(generalization, model, inspectorEl, deps) {
+  const {createBarGraph} = deps;
   const project = generalization; // test against generalization
 
+  // labels from model, classNames from project dataset
+  const labels = model.getClassLabels();
   const classNames = Object.keys(project.filesByClassName);
+  const sameLabelsAcrossDatasets = _.isEqual(labels.sort(), classNames.sort());
   await Promise.all(classNames.map(async className => {
     // for each class in model
     console.log('  inspect, className:', className);
@@ -150,15 +153,26 @@ async function inspect(generalization, model, inspectorEl) {
       labelEl.textContent = className;
       exampleEl.appendChild(labelEl);
 
-      // #E67701 #FFECE2 #ffffff
-      // #D84C6F #FFE9EC #ffffff
-      imgEl.classList.add('InspectExample-prediction');
       const predictionEl = document.createElement('div');
+      predictionEl.classList.add('InspectExample-prediction');
+      predictionEl.classList.add('graph-wrapper');
       const predictions = await model.predict(imgEl);
-      const prediction = _.last(_.sortBy(predictions, 'probability'));
-      predictionEl.textContent = `model says: ${prediction.className}, ${Math.round(100*prediction.probability)}%`;
+      // const prediction = _.last(_.sortBy(predictions, 'probability'));
+      // predictionEl.textContent = `model says: ${prediction.className}, ${Math.round(100*prediction.probability)}%`;
+      console.log('create', predictionEl, labels, predictions);
+      const fn = await createBarGraph(predictionEl, labels, predictions);
+      console.log('fn', fn);
       exampleEl.appendChild(predictionEl);
 
+      // only highlight if model labels and dataset labels match
+      if (sameLabelsAcrossDatasets) {
+        const prediction = _.last(_.sortBy(predictions, 'probability'));
+        if (className === prediction.className) {
+          exampleEl.classList.add('InspectExample-prediction-does-match');
+        } else {
+          exampleEl.classList.add('InspectExample-prediction-does-not-match');
+        }
+      }
       classEl.appendChild(exampleEl);
     }));
 
@@ -167,14 +181,14 @@ async function inspect(generalization, model, inspectorEl) {
 }
 
 
-async function main() {
+export async function main(deps) {
   const els = {
     modelZipInput: document.querySelector('#upload-model-zip-input'),
     projectZipInput: document.querySelector('#upload-project-zip-input'),
     generalizationZipInput: document.querySelector('#upload-generalization-zip-input'),
     inspectButton: document.querySelector('#inspect-button'),
     log: document.querySelector('#log'),
-    inspection: document.querySelector('#inspection'),
+    inspection: document.querySelector('#inspection')
   }
   const app = new App(document.body, els);
   window.app = app; //debug
@@ -206,8 +220,6 @@ async function main() {
     const {model, generalization} = app.readState();
     if (!model || !generalization) return;
 
-    await inspect(generalization, model, els.inspection);
+    await inspect(generalization, model, els.inspection, deps);
   });
 }
-
-main();

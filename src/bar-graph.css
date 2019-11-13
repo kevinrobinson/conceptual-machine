@@ -1,0 +1,29 @@
+.graph-wrapper > div {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    margin: 10px 0;
+}
+.graph-wrapper > div > * {
+    display: inline-block;
+    width: var(--box-size);
+    margin: 0 10px;
+}
+.graph-wrapper > div > :first-child {
+    text-align: right;
+}
+.graph-wrapper > div > progress {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 28px;
+}
+.graph-wrapper > div > progress::-webkit-progress-bar {
+    border-radius: 4px;
+    background-color: var(--color-light);
+    border: 1px solid var(--color);
+}
+.graph-wrapper > div > progress::-webkit-progress-value {
+    border-radius: 2px;
+    background-color: var(--color);
+}
