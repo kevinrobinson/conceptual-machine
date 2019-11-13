@@ -9,7 +9,6 @@ class App {
     this.els = els;
     this.state = {
       project: null,
-      model: null,
       generalization: null
     };
   }
@@ -24,10 +23,24 @@ class App {
   }
 
   render() {
-    console.log('render');
-    const pre = document.createElement('pre');
-    pre.textContent = JSON.stringify(this.state).length;
-    this.els.log.appendChild(pre);
+    // console.log('render');
+    // const pre = document.createElement('pre');
+    // pre.textContent = JSON.stringify(this.state).length;
+    // this.els.log.appendChild(pre);
+    const {generalization, model} = this.state;
+
+
+    if (model) {
+      this.els.modelStatus.textContent = 'ready!';
+    }
+    if (generalization) {
+      this.els.generalizationStatus.textContent = 'ready!';
+    }
+
+    // buttons
+    const canAnalyze = (generalization && model);
+    this.els.embeddingsButton.disabled = !canAnalyze;
+    this.els.inspectButton.disabled = !canAnalyze;
   }
 }
 
@@ -125,6 +138,7 @@ async function inspect(generalization, model, inspectorEl, deps) {
   const project = generalization; // test against generalization
 
   // labels from model, classNames from project dataset
+  inspectorEl.innerHTML = '';
   const labels = model.getClassLabels();
   const classNames = Object.keys(project.filesByClassName);
   const sameLabelsAcrossDatasets = _.isEqual(labels.sort(), classNames.sort());
@@ -133,9 +147,10 @@ async function inspect(generalization, model, inspectorEl, deps) {
     console.log('  inspect, className:', className);
     const classEl = document.createElement('div');
     classEl.classList.add('InspectClass');
-    const titleEl = document.createElement('div');
+    const titleEl = document.createElement('h2');
     titleEl.classList.add('InspectClass-title');
-    titleEl.textContent = className;
+    titleEl.textContent = `Generalization label: ${className}`;
+    classEl.appendChild(titleEl);
 
     // add all images and the model prediction for that image
     const imageBlobUrls = project.filesByClassName[className] || [];
@@ -185,7 +200,8 @@ async function inspect(generalization, model, inspectorEl, deps) {
 export async function main(deps) {
   const els = {
     modelZipInput: document.querySelector('#upload-model-zip-input'),
-    projectZipInput: document.querySelector('#upload-project-zip-input'),
+    modelStatus: document.querySelector('#model-status'),
+    generalizationStatus: document.querySelector('#generalization-status'),
     generalizationZipInput: document.querySelector('#upload-generalization-zip-input'),
     generalizationPreview: document.querySelector('#generalization-preview'),
     log: document.querySelector('#log'),
@@ -196,10 +212,12 @@ export async function main(deps) {
   }
   const app = new App(document.body, els);
   window.app = app; //debug
+  app.render();
 
 
   els.modelZipInput.addEventListener('change', async e => {
     if (e.target.files.length === 0) return;
+    els.modelStatus.textContent = 'loading...';
     const [modelZip] = e.target.files;
     const model = await loadImageModelFromZipFile(modelZip);
     app.update({model});
@@ -207,30 +225,35 @@ export async function main(deps) {
 
   els.generalizationZipInput.addEventListener('change', async e => {
     if (e.target.files.length === 0) return;
+    els.generalizationStatus.textContent = 'loading...';
     const [projectZip] = e.target.files;
     const generalization = await loadImageProjectFromZipFile(projectZip);
     app.update({generalization});
 
-    // show
-    els.generalizationPreview.innerHTML = '';
-    await mapExamples(generalization, async (className, blobUrl, index) => {
-      const imgEl = document.createElement('img');
-      imgEl.src = blobUrl;
-      imgEl.width = 224/4;
-      imgEl.height = 224/4;
-      els.generalizationPreview.appendChild(imgEl);
-    });
+    const previewGeneralizationImages = false;
+    if (previewGeneralizationImages) {
+      els.generalizationPreview.innerHTML = '';
+      await mapExamples(generalization, async (className, blobUrl, index) => {
+        const imgEl = document.createElement('img');
+        imgEl.src = blobUrl;
+        imgEl.width = 224/4;
+        imgEl.height = 224/4;
+        els.generalizationPreview.appendChild(imgEl);
+      });
+    }
   });
 
   els.inspectButton.addEventListener('click', async e => {
     const {model, generalization} = app.readState();
     if (!model || !generalization) return;
+    els.inspection.textContent = 'working...';
     await inspect(generalization, model, els.inspection, deps);
   });
 
   els.embeddingsButton.addEventListener('click', async e => {
     const {model, generalization} = app.readState();
     if (!model || !generalization) return;
+    els.embeddings.textContent = 'working...';
     await embeddings(generalization, model, els.embeddings);
   });
 }
@@ -320,6 +343,13 @@ function cropTensor(img) {
 
 
 async function embeddings(generalization, model, el) {
+  // clear, show waiting
+  el.innerHTML = '';
+  const waitingEl = document.createElement('div');
+  waitingEl.classList.add('Status');
+  waitingEl.textContent = 'working...';
+  el.appendChild(waitingEl);
+
   debug('Starting embeddings...');
   const examples = await mapExamples(generalization, async (className, blobUrl, index) => {
     const imgEl = document.createElement('img');
@@ -365,11 +395,12 @@ async function embeddings(generalization, model, el) {
   debug('Projecting with UMAP...');
   // older: projectWithUmap(el, embeddingsList);
 
+
   // for multiple
   const baseEl = document.createElement('div');
   const trainedEl = document.createElement('div');
   const movementEl = document.createElement('div');
-  [baseEl, trainedEl, movementEl].forEach(element => {
+  [baseEl, trainedEl].forEach(element => {
     element.classList.add('Projector');
     el.appendChild(element);
   });
@@ -385,8 +416,8 @@ async function embeddings(generalization, model, el) {
     sprites: false,
     color: true
   };
-  useProjector(baseEl, baseEmbeddingsList, examples, options);
-  useProjector(trainedEl, embeddingsList, examples, options);
+  useProjector(baseEl, baseEmbeddingsList, examples, {...options, title: 'Embeddings from MobileNet'});
+  useProjector(trainedEl, embeddingsList, examples, {...options, title: 'Embeddings from your model'});
 
   // show movement in same (fake) space
   const showMovement = false;
@@ -400,6 +431,7 @@ async function embeddings(generalization, model, el) {
     useProjector(movementEl, movementEmbeddings, examples.concat(examples), {...options, sequences});
   }
   
+  el.removeChild(waitingEl);
   debug('Done.');
 }
 
@@ -509,13 +541,21 @@ async function useProjector(el, embeddingsList, examples, options = {}) {
     console.log('spriteMetadata', dataset.spriteMetadata);
   }
 
+
   // hover message
   const messageEl = document.createElement('div');
   messageEl.classList.add('Projector-message');
   el.appendChild(messageEl);
 
+  const titleEl = document.createElement('h2');
+  titleEl.textContent = options.title || 'UMAP projection';
+  el.appendChild(titleEl);
+
   // config
-  const scatterGL = new ScatterGL(el, {
+  const containerEl = document.createElement('div');
+  containerEl.classList.add('Projector-content');
+  el.appendChild(containerEl);
+  const scatterGL = new ScatterGL(containerEl, {
     // renderMode: (dataset.spriteMetadata) ? 'SPRITE' : 'POINT',
     // onHover: (index) => {
     //   if (index === null) {

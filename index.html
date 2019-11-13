@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-  <title>inspectable-machine</title>
+  <title>warping-machine</title>
   <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -25,34 +25,83 @@
   </script>
   <script src="https://unpkg.com/prando@5.1.1/dist/Prando.umd.js"></script>
 
-  <h1>inspectable-machine</h1>
   <div>
-    <h2>model</h2>
-    <input id="upload-model-zip-input" type="file" name="file" />
-  </div>
+    <div style="margin: 10px; border-radius: 10px; box-shadow: 0px 2px 2px rgba(0,0,0,0.20); background: url(http://www.ex-astris-scientia.org/treknology/warp/warp-sti.jpg); backround-repeat: no-repeat; padding: 20px;">
+      <h1><a href="/">warping-machine</a></h1>
+    </div>
 
-  <div>
-    <h2>project with generalization dataset</h2>
-    <input id="upload-generalization-zip-input" type="file" name="file" />
-    <div id="generalization-preview"></div>
-  </div>
-  
-  <hr />
+    <div class="VerticalSection" style="display: flex; flex-direction: row;">
 
-  <div>
-    <h2>inspect</h2>
-    <button id="inspect-button">inspect!</button>
-    <div id="inspection"></div>
-  </div>
+      <div class="Panel">
+        <div class="Panel-content">
+          <h2>1. Image model</h2>
+          <div class="Panel-text">First, load an image model created in <a target="_blank" href="https://teachablemachine.withgoogle.com/train/image">Teachable Machine</a>.  This only accepts zip files uploaded locally.</div>
+        </div>
+        <div class="Panel-actions">
+          <div class="Status" id="model-status"></div>
+          <div class="File Button">
+            <div class="File-caption">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M12 6H20C21.1 6 22 6.9 22 8V18C22 19.1 21.1 20 20 20H4C2.9 20 2 19.1 2 18L2.01 6C2.01 4.9 2.9 4 4 4H10L12 6ZM4 8V18H20V8H4Z" fill="#888"></path>
+              </svg>
+              Open model.zip
+            </div>
+            <input id="upload-model-zip-input" class="fileList" type="file" accept="application/zip">
+          </div>
+          <a class="ExampleLink" href="/data/example-model.zip"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path fill-rule="evenodd" clip-rule="evenodd" d="M13 12.17L15.59 9.59L17 11L12 16L7 11L8.41 9.59L11 12.17V4H13V12.17ZM6 15H4V18C4 19.1 4.9 20 6 20H18C19.1 20 20 19.1 20 18V15H18V18H6V15Z" fill="#888"></path>
+            </svg>
+            <span>Download example</span>
+          </a>
+        </div>
+      </div>
 
-  <div>
-    <h2>embeddings</h2>
-    <button id="embeddings-button">embeddings!</button>
-    <div id="embeddings"></div>
-  </div>
-  
+      <div class="Panel">
+        <div class="Panel-content">
+          <h2>2. Generalization dataset</h2>
+          <div class="Panel-text">Next, load a<a target="_blank" href="https://teachablemachine.withgoogle.com/train/image">Teachable Machine</a> project that contains different images than what the model was trained on, but labeled with the same class names.</div>
+        </div>
+        <div class="Panel-actions">
+          <div class="Status" id="generalization-status"></div>
+          <div class="File Button">
+            <div class="File-caption">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M12 6H20C21.1 6 22 6.9 22 8V18C22 19.1 21.1 20 20 20H4C2.9 20 2 19.1 2 18L2.01 6C2.01 4.9 2.9 4 4 4H10L12 6ZM4 8V18H20V8H4Z" fill="#888"></path>
+              </svg>
+              Open project.zip
+            </div>
+            <input id="upload-generalization-zip-input" class="fileList" type="file" accept="application/zip">  
+          </div>
+          <a class="ExampleLink" href="/data/example-generalization-project.zip">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path fill-rule="evenodd" clip-rule="evenodd" d="M13 12.17L15.59 9.59L17 11L12 16L7 11L8.41 9.59L11 12.17V4H13V12.17ZM6 15H4V18C4 19.1 4.9 20 6 20H18C19.1 20 20 19.1 20 18V15H18V18H6V15Z" fill="#888"></path>
+            </svg>
+            <span>Download example</span>
+          </a>
+        </div>
+      </div>
 
-  <div id="log"></div>
+      <div class="Panel">
+        <div class="Panel-content">
+          <h2>3. Visualize!</h2>
+          <div class="Panel-text">Now you can visualize how well the model did on the generalization set.  You can scan through individual classification errors, or compare how the images appear in <a href="https://github.com/tensorflow/tfjs-models/tree/master/mobilenet" target="_blank">MobileNet</a> embedding space versus your model's embedding space.</div>
+        </div>
+        <div class="Panel-actions">
+          <button disabled="disabled" style="display: inline-block;" id="inspect-button" class="Button">Browse accuracy</button>
+          <button disabled="disabled" style="margin-top: 10px; display: inline-block;" id="embeddings-button" class="Button">Visualize embedding space</button>
+        </div>
+      </div>
+    </div>
+    
+    <div>
+      <div id="generalization-preview"></div>
+      <div class="Workspace" id="inspection"></div>
+      <div class="Workspace" id="embeddings"></div>
+    </div>
+    
+
+    <div id="log"></div>
+  </div>
   <script type="module">
     import {create} from './src/bar-graph.js';
     import {main} from './src/index.js';

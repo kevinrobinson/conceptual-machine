@@ -24,16 +24,16 @@ function makeBar(graphWrapper, bars, label, index) {
 
     // assemble the elements
     barWrapper.appendChild(labelEl);
-    barWrapper.appendChild(barEl);
     barWrapper.appendChild(percentEl);
+    barWrapper.appendChild(barEl);
     graphWrapper.appendChild(barWrapper);
 
     // style the elements
-    let color = colors[index % colors.length];
-    let lightColor = lightColors[index % colors.length];
-    barWrapper.style.color = color;
-    barWrapper.style.setProperty('--color', color);
-    barWrapper.style.setProperty('--color-light', lightColor);
+    // let color = colors[index % colors.length];
+    // let lightColor = lightColors[index % colors.length];
+    // barWrapper.style.color = color;
+    // barWrapper.style.setProperty('--color', color);
+    // barWrapper.style.setProperty('--color-light', lightColor);
 
     // save references to each element, so we can update them later
     bars[label] = {

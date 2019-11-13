@@ -1,5 +1,44 @@
+body {
+  font-family: "Benton Sans", "Helvetica Neue", helvetica, arial, sans-serif;
+  max-width: 1200px;
+  background: #E8EAED;
+  margin: 20px;
+  margin-bottom: 40px;
+}
+
 * {
-  font-family: Verdana;
+  line-height: 1.3em;
+}
+
+a {
+  /*color: rgb(229,119, 1);*/
+  /*color: rgb(121, 74, 239);*/
+  color: rgb(216, 76, 110);
+  text-decoration: none;
+}
+
+h1 {
+  /*text-shadow: -1px -1px 0 rgb(229,119, 1), 1px -1px 0 rgb(229,119, 1), -1px 1px 0 rgb(229,119, 1), 1px 1px 0 rgb(229,119, 1);*/
+  transform: rotate(-1deg);
+  background: rgb(121, 74, 239);
+  border-radius: 4px;
+  box-shadow: 0px 2px 2px rgba(0,0,0,0.20);
+  display: inline-block;
+  padding: 10px;
+  padding-left: 15px;
+  padding-right: 15px;
+}
+
+h1 > a {
+  color: #f8f8f8;
+}
+
+h2 {
+  padding: 0;
+  margin: 0;
+  padding-bottom: 10px;
+  font-size: 18px;
+  border-bottom: 1px solid #dedede;
 }
 
 
@@ -11,30 +50,49 @@
 .InspectExample {
   margin: 10px;
   padding: 20px;
-  border: 1px solid #f8f8f8;
+  /*border: 1px solid #f8f8f8;*/
+  display: flex;
+}
+
+.InspectExample-img {
+  width: 112px;
+  height: 112px;
 }
 
 .InspectExample-label {
-  font-size: 18px;
+  display: none;
+  font-size: 14px;
   font-weight: bold;
 }
 
+.InspectExample-prediction {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
 .InspectExample-prediction-does-not-match {
-  background: rgba(255, 0, 0, 0.2);
+  background: rgba(200, 0, 0, 0.2);
 }
 
 .InspectExample-prediction-does-match {
-  background: rgba(0, 255, 0, 0.2);
+  /*background: rgba(0, 200, 0, 0.3);*/
 }
 
 .Projector {
   position: relative;
   display: inline-block;
-  width: 600px;
-  height: 600px;
-  outline: 1px solid #ccc;
+  border-radius: 10px;
+  box-shadow: 0px 2px 2px rgba(0,0,0,0.20);
   margin: 20px;
-  padding: 10px;
+  padding: 20px;
+  background: white;
+}
+
+.Projector-content {
+  width: 450px;
+  height: 450px;
+  /*outline: 1px solid #ccc;*/
 }
 
 .Projector-message {
@@ -43,3 +101,133 @@
   left: 0;
   padding: 10px;
 }
+
+
+#log {
+  display: none;
+}
+
+.VerticalSection {
+  /*border: 1px solid #ccc;*/
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+
+.Panel {
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0px 2px 2px rgba(0,0,0,0.20);
+  padding: 20px;
+  margin: 10px;
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.Panel-content {
+}
+
+.Panel-actions {
+  display: flex;
+  flex-direction: column;
+}
+
+.Panel .Panel-text {
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+
+.Panel .File {
+  vertical-align: middle;
+}
+
+.ExampleLink {
+  margin-left: 15px;
+  vertical-align: middle;
+  font-size: 12px;
+  color: #888;
+  text-decoration: none;
+  display: block;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  display: flex;
+  align-items: center;
+}
+
+.ExampleLink > svg {
+  margin-right: 10px;
+}
+
+
+.Status {
+  color: green;
+  margin: 10px;
+  font-size: 12px;
+}
+
+.Workspace {
+  margin-top: 20px;
+}
+
+
+
+/* from https://github.com/kevinrobinson/agreeable-pisces/blob/master/style.css */
+.File {
+  display: inline-block;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.File-caption {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.File-caption > svg {
+  margin-right: 10px;
+}
+
+.File > input {
+  opacity: 0.0;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  cursor: pointer;
+}
+
+
+
+.Button {
+  padding: 10px;
+  padding-right: 15px;
+  padding-left: 15px;
+  background: #E8F0FE;
+  color: #1967D2;
+  font-size: 14px;
+  margin-right: 10px;
+  cursor: pointer;
+  border: 0;
+  border-radius: 4px;
+}
+
+.Button:disabled, .Button[disabled] {
+  color: #5F6368;
+  background-color: #F1F3F4;
+  pointer-events: none;
+  cursor: default;
+}
+/*
+.Button {
+  padding: 8px;
+  background: #eee;
+  border: 1px solid #ccc;
+  font-size: 12px;
+  margin-right: 10px;
+  cursor: pointer;
+}*/
