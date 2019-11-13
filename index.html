@@ -1,8 +1,12 @@
-<html>
-<head>
+<!DOCTYPE html>
+<html lang="en">
+  <head>
   <title>inspectable-machine</title>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" type="text/css" href="src/index.css">
-  <link rel="stylesheet" type="text/css" href="src/bar-graph.css">
+  <link rel="stylesheet" type="text/css" href="src/bar-graph.css">  
 </head>
 <body>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
@@ -16,30 +20,37 @@
   <script src="https://cdn.jsdelivr.net/npm/scatter-gl@0.0.1/lib/scatter-gl.min.js"></script>
   <script src="https://d3js.org/d3.v4.js"></script>
 
+ <script>
+    window.module = {exports: {}}; // hack for prando umd not working
+  </script>
+  <script src="https://unpkg.com/prando@5.1.1/dist/Prando.umd.js"></script>
+
   <h1>inspectable-machine</h1>
   <div>
     <h2>model</h2>
     <input id="upload-model-zip-input" type="file" name="file" />
   </div>
 
-  <div style="opacity: 0.25;">
-    <h2>project</h2>
-    <input id="upload-project-zip-input" type="file" name="file" />
-    </h2>
-  </div>
-
   <div>
     <h2>project with generalization dataset</h2>
     <input id="upload-generalization-zip-input" type="file" name="file" />
-    </h2>
+    <div id="generalization-preview"></div>
+  </div>
+  
+  <hr />
+
+  <div>
+    <h2>inspect</h2>
+    <button id="inspect-button">inspect!</button>
+    <div id="inspection"></div>
   </div>
 
   <div>
-    <h2>inspector</h2>
-    <button id="inspect-button">inspect!</button>
+    <h2>embeddings</h2>
+    <button id="embeddings-button">embeddings!</button>
     <div id="embeddings"></div>
-    <div id="inspection"></div>
   </div>
+  
 
   <div id="log"></div>
   <script type="module">

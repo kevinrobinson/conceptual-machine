@@ -1,4 +1,7 @@
-console.log('dependencies', {JSZip, _, tmImage, UMAP, ScatterGL});
+// console.log('dependencies', {JSZip, _, tmImage, UMAP, ScatterGL});
+
+const RANDOM_SEED = 42;
+console.log('RANDOM_SEED', RANDOM_SEED);
 
 class App {
   constructor(el, els) {
@@ -184,9 +187,11 @@ export async function main(deps) {
     modelZipInput: document.querySelector('#upload-model-zip-input'),
     projectZipInput: document.querySelector('#upload-project-zip-input'),
     generalizationZipInput: document.querySelector('#upload-generalization-zip-input'),
-    inspectButton: document.querySelector('#inspect-button'),
+    generalizationPreview: document.querySelector('#generalization-preview'),
     log: document.querySelector('#log'),
+    inspectButton: document.querySelector('#inspect-button'),
     inspection: document.querySelector('#inspection'),
+    embeddingsButton: document.querySelector('#embeddings-button'),
     embeddings: document.querySelector('#embeddings'),
   }
   const app = new App(document.body, els);
@@ -200,28 +205,33 @@ export async function main(deps) {
     app.update({model});
   });
 
-  els.projectZipInput.addEventListener('change', async e => {
-    if (e.target.files.length === 0) return;
-    const [projectZip] = e.target.files;
-    const project = await loadImageProjectFromZipFile(projectZip);
-    app.update({project});
-  });
-
   els.generalizationZipInput.addEventListener('change', async e => {
     if (e.target.files.length === 0) return;
     const [projectZip] = e.target.files;
     const generalization = await loadImageProjectFromZipFile(projectZip);
     app.update({generalization});
-  });
 
+    // show
+    els.generalizationPreview.innerHTML = '';
+    await mapExamples(generalization, async (className, blobUrl, index) => {
+      const imgEl = document.createElement('img');
+      imgEl.src = blobUrl;
+      imgEl.width = 224/4;
+      imgEl.height = 224/4;
+      els.generalizationPreview.appendChild(imgEl);
+    });
+  });
 
   els.inspectButton.addEventListener('click', async e => {
     const {model, generalization} = app.readState();
     if (!model || !generalization) return;
-
     await inspect(generalization, model, els.inspection, deps);
+  });
 
-    await embeddings(model, generalization, els.embeddings);
+  els.embeddingsButton.addEventListener('click', async e => {
+    const {model, generalization} = app.readState();
+    if (!model || !generalization) return;
+    await embeddings(generalization, model, els.embeddings);
   });
 }
 
@@ -254,6 +264,33 @@ function inferMobileNet(tmImageModel, raster) {
   return seq.predict(capture(raster));
 }
 
+// doesn't work, just grabbing dense layer already has inbound
+// connections from previous
+function inferFromMobileNetEmbedding(tmImageModel, mobileNetEmbedding) {
+  const tfModel = tmImageModel.model;
+
+  // try to just rewire
+  // const denseLayer = _.first(_.last(tfModel.layers).layers);
+  // denseLayer.inboundNodes = [];
+  // const seq2 = tf.sequential();
+  // seq2.add(denseLayer); // mobilenet embeddings only
+  // return seq.predict(mobileNetEmbedding);
+
+  // try to rebuild from config and weights
+  const denseLayer = _.first(_.last(tfModel.layers).layers);
+  const rewiredDenseLayer = tf.layers.dense({
+    ...denseLayer.getConfig(),
+    inputShape: [null, 1280]
+  });
+  // rewiredDenseLayer.build();
+  // doesn't work
+  // rewiredDenseLayer.setWeights(denseLayer.getWeights());
+  const seq = tf.sequential({
+    layers: [rewiredDenseLayer]
+  });
+  return seq.predict(mobileNetEmbedding);
+}
+
 // copied
 function capture(rasterElement) {
     return tf.tidy(() => {
@@ -282,10 +319,13 @@ function cropTensor(img) {
 }
 
 
-async function embeddings(model, generalization, el) {
+async function embeddings(generalization, model, el) {
   debug('Starting embeddings...');
   const examples = await mapExamples(generalization, async (className, blobUrl, index) => {
-    return {className, blobUrl, index};
+    const imgEl = document.createElement('img');
+    await setImageSrc(imgEl, blobUrl);
+    const predictions = await model.predict(imgEl);
+    return {className, blobUrl, index, predictions};
   });
   const embeddingsList = await mapExamples(generalization, async (className, blobUrl, index) => {
     const imgEl = document.createElement('img');
@@ -298,11 +338,28 @@ async function embeddings(model, generalization, el) {
     return (await inferMobileNet(model, imgEl)).dataSync();
   });
 
-  //localStorage.setItem('examples', JSON.stringify(examples));localStorage.setItem('embeddingsList', JSON.stringify(embeddingsList));
+    //localStorage.setItem('examples', JSON.stringify(examples));localStorage.setItem('embeddingsList', JSON.stringify(embeddingsList));
   window.useProjector = useProjector;
   window.baseEmbeddingsList = baseEmbeddingsList;
   window.embeddingsList = embeddingsList;
   window.examples = examples;
+
+
+  // grid in mobilenet space, mapped to TM space, to see warping
+  const showGrid = false
+  if (showGrid) {
+    console.log('  grid points...');
+    const vals = _.range(-5, 5, 1).map(n => n/100);
+    const gridPoints = vals.map(v => _.range(0, 1280).map(i => v));
+    const gridTransforms = await Promise.all(gridPoints.map(async p => {
+      return (await inferFromMobileNetEmbedding(model, tf.tensor([p]))).dataSync();
+    }));
+    window.gridPoints = gridPoints;
+    window.gridTransforms = gridTransforms;
+
+    // useProjector(baseEl, baseEmbeddingsList, examples, gridPoints, options);
+    // useProjector(trainedEl, embeddingsList, examples, gridTransforms, options);
+  }
 
 
   debug('Projecting with UMAP...');
@@ -318,8 +375,13 @@ async function embeddings(model, generalization, el) {
   });
 
   // base, trained
+  const prng = new Prando(RANDOM_SEED)
+  const random = () => prng.next();
   const options = {
-    umap: {nComponents: 2}, // to change to 3d
+    umap: {
+      random, // fix seed for determinism
+      nComponents: 2 // to change to 3d
+    }, 
     sprites: false,
     color: true
   };
@@ -407,13 +469,25 @@ async function mapExamples(project, asyncFn) {
 
 
 async function useProjector(el, embeddingsList, examples, options = {}) {
+  // project
   debug('useProjector');
   const umap = new UMAP(options.umap || {});
   debug('  fitting...', options.umap || {});
   const xys = await umap.fitAsync(embeddingsList);
-  const dataset = new ScatterGL.Dataset(xys);
-  
-   window.xys = xys;
+
+  // reshape for scatterplot
+  // metadata is for `showLabelsOnHover`
+  const metadata = examples.map((example, i) => {
+    return {
+      // p: example.prediction.probability,
+      // label: example.className
+      // label: example.prediction.probability
+      label: `${i}  ${Math.round(100*example.predictions[0].probability)}% ${example.predictions[0].className}`
+    };
+  });
+  const dataset = new ScatterGL.Dataset(xys, metadata);
+
+   // window.xys = xys;
   //  localStorage.setItem('xys', JSON.stringify(xys));
   // console.log('xys', xys);
 
@@ -443,18 +517,21 @@ async function useProjector(el, embeddingsList, examples, options = {}) {
   // config
   const scatterGL = new ScatterGL(el, {
     // renderMode: (dataset.spriteMetadata) ? 'SPRITE' : 'POINT',
-    onHover: (index) => {
-      if (index === null) {
-        messageEl.style.color = '#ccc';
-        return;
-      } else {
-        messageEl.style.color = '#333';
-        messageEl.textContent = JSON.stringify({
-          xys: xys[index],
-          example: examples[index]
-        });
-      }
-    }
+    // onHover: (index) => {
+    //   if (index === null) {
+    //     messageEl.style.color = '#ccc';
+    //     return;
+    //   } else {
+    //     messageEl.style.color = '#333';
+    //     messageEl.textContent = JSON.stringify({
+    //       xys: xys[index],
+    //       example: examples[index]
+    //     });
+    //   }
+    // },
+    showLabelsOnHover: true, // requires `label` metadata
+    selectEnabled: false,
+    rotateOnStart: false
     // onSelect: (points) => {
     //   let message = '';
     //   if (points.length === 0 && lastSelectedPoints.length === 0) {
@@ -472,16 +549,36 @@ async function useProjector(el, embeddingsList, examples, options = {}) {
 
   // coloring, tied to number of classes
   if (options.color) {
-    const labels = _.uniq(examples.map(ex => ex.className)).sort();
-    const CLASSES_COUNT = labels.length;
-    const hues = [...new Array(CLASSES_COUNT)].map((_, i) => Math.floor((255 / CLASSES_COUNT) * i));
-    // const transparentColorsByLabel = hues.map(hue => `hsla(${hue}, 100%, 50%, 0.25)`);
-    // const opaqueColorsByLabel = hues.map(hue => `hsla(${hue}, 100%, 50%, 1)`);
-    const colorsByLabel = hues.map(hue => `hsl(${hue}, 100%, 80%)`);
+    // highlight midlines
     scatterGL.setPointColorer(i => {
-      const labelIndex = labels.indexOf(examples[i].className);
-      return colorsByLabel[labelIndex]
+      // truth, predicted
+      // if (i >= examples.length) return '#999'; // grid
+      const generalizationClassName = examples[i].className;
+      const prediction = _.last(_.sortBy(examples[i].predictions, 'probability'));
+      const predictedClassName = prediction.className;
+      const hue = (generalizationClassName === predictedClassName) ? 120 : 0;
+
+      return `hsl(${hue}, 100%, ${100 - Math.round(50*prediction.probability)}%)`;
     });
+
+    // alt colors, from tf playground
+    // #f59322
+    // #e8eaeb
+    // #0877bd
+
+    // const labels = _.uniq(examples.map(ex => ex.className)).sort();
+    // const CLASSES_COUNT = labels.length*2;
+    // const hues = [...new Array(CLASSES_COUNT)].map((_, i) => Math.floor((255 / CLASSES_COUNT) * i));
+    // const colorsByLabel = hues.map(hue => `hsl(${hue}, 100%, 30%)`);
+    // scatterGL.setPointColorer(i => {
+    //   // truth, predicted
+    //   const generalizationClassName = examples[i].className;
+    //   const predictedClassName = _.last(_.sortBy(examples[i].predictions, 'probability')).className;
+
+    //   const labelIndex = labels.indexOf(generalizationClassName);
+    //   const offset = (generalizationClassName === predictedClassName) ? labels.length : 0;
+    //   return colorsByLabel[labelIndex + offset];
+    // });
   }
 
   // sequences
