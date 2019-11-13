@@ -221,13 +221,7 @@ export async function main(deps) {
 
     await inspect(generalization, model, els.inspection, deps);
 
-    const baseEl = document.createElement('div');
-    baseEl.classList.add('Projector');
-    els.embeddings.appendChild(baseEl);
-    const trainedEl = document.createElement('div');
-    trainedEl.classList.add('Projector');
-    els.embeddings.appendChild(trainedEl);
-    await embeddings(model, generalization, baseEl, trainedEl);
+    await embeddings(model, generalization, els.embeddings);
   });
 }
 
@@ -288,7 +282,7 @@ function cropTensor(img) {
 }
 
 
-async function embeddings(model, generalization, baseEl, trainedEl) {
+async function embeddings(model, generalization, el) {
   debug('Starting embeddings...');
   const examples = await mapExamples(generalization, async (className, blobUrl, index) => {
     return {className, blobUrl, index};
@@ -310,11 +304,39 @@ async function embeddings(model, generalization, baseEl, trainedEl) {
   window.embeddingsList = embeddingsList;
   window.examples = examples;
 
+
   debug('Projecting with UMAP...');
-  // projectWithUmap(el, embeddingsList);
-  useProjector(baseEl, baseEmbeddingsList, examples);
-  useProjector(trainedEl, embeddingsList, examples);
-  
+  // older: projectWithUmap(el, embeddingsList);
+
+  // for multiple
+  const baseEl = document.createElement('div');
+  const trainedEl = document.createElement('div');
+  const movementEl = document.createElement('div');
+  [baseEl, trainedEl, movementEl].forEach(element => {
+    element.classList.add('Projector');
+    el.appendChild(element);
+  });
+
+  // base, trained
+  const options = {
+    umap: {nComponents: 2}, // to change to 3d
+    sprites: false,
+    color: true
+  };
+  useProjector(baseEl, baseEmbeddingsList, examples, options);
+  useProjector(trainedEl, embeddingsList, examples, options);
+
+  // show movement in same (fake) space
+  const showMovement = false;
+  if (showMovement) {
+    const movementEmbeddings = baseEmbeddingsList.concat(embeddingsList);
+    const sequences = baseEmbeddingsList.map((embedding, index) => {
+      return {
+        indices: [index, index + baseEmbeddingsList.length]
+      };
+    });
+    useProjector(movementEl, movementEmbeddings, examples.concat(examples), {...options, sequences});
+  }
   
   debug('Done.');
 }
@@ -345,71 +367,82 @@ async function mapExamples(project, asyncFn) {
 
 
 // needs more than n=15 by default
-async function projectWithUmap(el, embeddingsList) {
-  console.log('projectWithUmap', embeddingsList.length);
-  const umap = new UMAP();
-  console.log('fitting', umap);
-  const xys = await umap.fitAsync(embeddingsList);
-  console.log('xys', xys);
-  const xDomain = [_.min(xys.map(xy => xy[0])), _.max(xys.map(xy => xy[0]))];
-  const yDomain = [_.min(xys.map(xy => xy[1])), _.max(xys.map(xy => xy[1]))];
-  console.log('xDomain', xDomain);
-  console.log('yDomain', yDomain);
+// async function projectWithUmap(el, embeddingsList) {
+//   console.log('projectWithUmap', embeddingsList.length);
+//   const umap = new UMAP();
+//   console.log('fitting', umap);
+//   const xys = await umap.fitAsync(embeddingsList);
+//   console.log('xys', xys);
+//   const xDomain = [_.min(xys.map(xy => xy[0])), _.max(xys.map(xy => xy[0]))];
+//   const yDomain = [_.min(xys.map(xy => xy[1])), _.max(xys.map(xy => xy[1]))];
+//   console.log('xDomain', xDomain);
+//   console.log('yDomain', yDomain);
   
-  var xScale = d3.scaleLinear()
-      .domain(xDomain)
-      .range([ 0, 800 ]);
-  var yScale = d3.scaleLinear()
-      .domain(yDomain)
-      .range([ 0, 600 ]);
-  const ns = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('width', 800);
-  svg.setAttribute('height', 600);
-  svg.style.width = '800px';
-  svg.style.height = '600px';
+//   var xScale = d3.scaleLinear()
+//       .domain(xDomain)
+//       .range([ 0, 800 ]);
+//   var yScale = d3.scaleLinear()
+//       .domain(yDomain)
+//       .range([ 0, 600 ]);
+//   const ns = "http://www.w3.org/2000/svg";
+//   const svg = document.createElementNS(ns, 'svg');
+//   svg.setAttribute('width', 800);
+//   svg.setAttribute('height', 600);
+//   svg.style.width = '800px';
+//   svg.style.height = '600px';
   
-  console.log('projected', xys.map(xy => [xScale(xy[0]), yScale(xy[1])]));
-  xys.forEach((xy, index) => {
-    const [x, y] = xy;
-    const circle = document.createElementNS(ns, 'circle');
-    circle.setAttribute('cx', xScale(x));
-    circle.setAttribute('cy', yScale(y));
-    circle.setAttribute('r', 5);
-    const i = Math.round(index / xys.length * 16);
-    circle.setAttribute('fill', `#ff${i.toString(16)}`); // rgb didn't work, even in web inspector? confused, but working around...
-    svg.appendChild(circle);
-  });
-  el.appendChild(svg);
-}
+//   console.log('projected', xys.map(xy => [xScale(xy[0]), yScale(xy[1])]));
+//   xys.forEach((xy, index) => {
+//     const [x, y] = xy;
+//     const circle = document.createElementNS(ns, 'circle');
+//     circle.setAttribute('cx', xScale(x));
+//     circle.setAttribute('cy', yScale(y));
+//     circle.setAttribute('r', 5);
+//     const i = Math.round(index / xys.length * 16);
+//     circle.setAttribute('fill', `#ff${i.toString(16)}`); // rgb didn't work, even in web inspector? confused, but working around...
+//     svg.appendChild(circle);
+//   });
+//   el.appendChild(svg);
+// }
 
 
-async function useProjector(el, embeddingsList, examples) {
+async function useProjector(el, embeddingsList, examples, options = {}) {
   debug('useProjector');
-  const umap = new UMAP();
-  debug('  fitting...');
+  const umap = new UMAP(options.umap || {});
+  debug('  fitting...', options.umap || {});
   const xys = await umap.fitAsync(embeddingsList);
-  debug('  rendering...');
-  //  window.xys = xys;
+  const dataset = new ScatterGL.Dataset(xys);
+  
+   window.xys = xys;
   //  localStorage.setItem('xys', JSON.stringify(xys));
   // console.log('xys', xys);
 
+  debug('  rendering...');
+  
+  // create spritesheet and attach to dataset
+  if (options.sprites) {
+    const sprites = examples.map(example => {
+      return {uri: example.blobUrl}
+    });
+    const SPRITE_SHEET_SIZE = 64;
+    const spriteSheetImgEl = await createSpriteSheetForScatterplot(sprites, SPRITE_SHEET_SIZE, SPRITE_SHEET_SIZE, {opacity: 0.5});
+     console.log('spriteSheetImgEl', spriteSheetImgEl);
+     document.body.appendChild(spriteSheetImgEl);
+    dataset.setSpriteMetadata({
+      spriteImage: spriteSheetImgEl,
+      singleSpriteSize: [SPRITE_SHEET_SIZE, SPRITE_SHEET_SIZE],
+    });
+    console.log('spriteMetadata', dataset.spriteMetadata);
+  }
+
+  // hover message
   const messageEl = document.createElement('div');
   messageEl.classList.add('Projector-message');
   el.appendChild(messageEl);
-  // data.projection.forEach((vector, index) => {
-  //   const labelIndex = data.labels[index];
-  //   dataPoints.push(vector);
-  //   metadata.push({
-  //     labelIndex,
-  //     label: data.labelNames[labelIndex],
-  //   });
-  // });
-  const metadata = xys.map(i => {
-    return {i};
-  });
-  const dataset = new ScatterGL.Dataset(xys, metadata);
+
+  // config
   const scatterGL = new ScatterGL(el, {
+    // renderMode: (dataset.spriteMetadata) ? 'SPRITE' : 'POINT',
     onHover: (index) => {
       if (index === null) {
         messageEl.style.color = '#ccc';
@@ -421,43 +454,91 @@ async function useProjector(el, embeddingsList, examples) {
           example: examples[index]
         });
       }
-    },
-    onSelect: (points) => {
-      let message = '';
-      if (points.length === 0 && lastSelectedPoints.length === 0) {
-        message = '🔥 no selection';
-      } else if (points.length === 0 && lastSelectedPoints.length > 0) {
-        message = '🔥 deselected';
-      } else if (points.length === 1) {
-        message = `🔥 selected ${points}`;
-      } else {
-        message = `🔥selected ${points.length} points`;
-      }
-      messageEl.textContent = message;
-    },
-    renderMode: 'POINT'
+    }
+    // onSelect: (points) => {
+    //   let message = '';
+    //   if (points.length === 0 && lastSelectedPoints.length === 0) {
+    //     message = '🔥 no selection';
+    //   } else if (points.length === 0 && lastSelectedPoints.length > 0) {
+    //     message = '🔥 deselected';
+    //   } else if (points.length === 1) {
+    //     message = `🔥 selected ${points}`;
+    //   } else {
+    //     message = `🔥selected ${points.length} points`;
+    //   }
+    //   messageEl.textContent = message;
+    // }
   });
 
   // coloring, tied to number of classes
-  const labels = _.uniq(examples.map(ex => ex.className)).sort();
-  const CLASSES_COUNT = labels.length;
-  const hues = [...new Array(CLASSES_COUNT)].map((_, i) => Math.floor((255 / CLASSES_COUNT) * i));
-  const transparentColorsByLabel = hues.map(hue => `hsla(${hue}, 100%, 50%, 0.75)`);
-  const opaqueColorsByLabel = hues.map(hue => `hsla(${hue}, 100%, 50%, 1)`);
-  scatterGL.setPointColorer(i => {
-    const labelIndex = labels.indexOf(examples[i].className);
-    // transparentColorsByLabel[labelIndex];
-    return transparentColorsByLabel[labelIndex]
-  });
+  if (options.color) {
+    const labels = _.uniq(examples.map(ex => ex.className)).sort();
+    const CLASSES_COUNT = labels.length;
+    const hues = [...new Array(CLASSES_COUNT)].map((_, i) => Math.floor((255 / CLASSES_COUNT) * i));
+    // const transparentColorsByLabel = hues.map(hue => `hsla(${hue}, 100%, 50%, 0.25)`);
+    // const opaqueColorsByLabel = hues.map(hue => `hsla(${hue}, 100%, 50%, 1)`);
+    const colorsByLabel = hues.map(hue => `hsl(${hue}, 100%, 80%)`);
+    scatterGL.setPointColorer(i => {
+      const labelIndex = labels.indexOf(examples[i].className);
+      return colorsByLabel[labelIndex]
+    });
+  }
 
-  // dataset.setSpriteMetadata({
-  //   spriteImage: 'spritesheet.png',
-  //   singleSpriteSize: [28, 28],
-  // });
-  // scatterGL.setSpriteRenderMode();
+  // sequences
+  console.log('options.sequences', options.sequences);
+  scatterGL.setSequences(options.sequences || []);
+
+  // controls
+  scatterGL.setPanMode();
+
+  // dimensions
+  scatterGL.setDimensions((options.umap || {}).nComponents || 2);
+
+  // actual render
   scatterGL.render(dataset);
+
+  // seems to have to come after, maybe a bug?
+  if (dataset.spriteMetadata) {
+    scatterGL.setSpriteRenderMode();
+  }
+
+  window.scatterGL = scatterGL;
+  window.dataset = dataset;
 }
 
 
 
 
+
+// items is [{uri}]
+// img element
+async function createSpriteSheetForScatterplot(items, width, height, options = {}) {
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+  context.globalAlpha = options.opacity || 1.0;
+  console.log('context.globalAlpha', context.globalAlpha);
+
+  const cols = Math.ceil(Math.sqrt(items.length));
+  canvas.width = cols * width;
+  canvas.height = cols * width;
+  await Promise.all(items.map((item, index) => {
+    const x = width * (index % cols);
+    const y = height * Math.floor(index / cols);
+    const img = new Image();
+    return new Promise(function(resolve, reject) {
+      img.onload = function() {
+        context.drawImage(img, x, y, width, height);
+        resolve();
+      };
+      img.crossOrigin = 'Anonymous';
+      img.src = item.uri;
+    });
+  }));
+  
+  const uri = canvas.toDataURL();
+  const img = document.createElement('img');
+  img.width = canvas.width;
+  img.height = canvas.height;
+  img.src = uri;
+  return img;
+}
