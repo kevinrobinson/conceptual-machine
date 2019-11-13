@@ -1,4 +1,4 @@
-console.log('dependencies', {JSZip, _, tmImage});
+console.log('dependencies', {JSZip, _, tmImage, UMAP, ScatterGL});
 
 class App {
   constructor(el, els) {
@@ -159,9 +159,7 @@ async function inspect(generalization, model, inspectorEl, deps) {
       const predictions = await model.predict(imgEl);
       // const prediction = _.last(_.sortBy(predictions, 'probability'));
       // predictionEl.textContent = `model says: ${prediction.className}, ${Math.round(100*prediction.probability)}%`;
-      console.log('create', predictionEl, labels, predictions);
       const fn = await createBarGraph(predictionEl, labels, predictions);
-      console.log('fn', fn);
       exampleEl.appendChild(predictionEl);
 
       // only highlight if model labels and dataset labels match
@@ -188,7 +186,8 @@ export async function main(deps) {
     generalizationZipInput: document.querySelector('#upload-generalization-zip-input'),
     inspectButton: document.querySelector('#inspect-button'),
     log: document.querySelector('#log'),
-    inspection: document.querySelector('#inspection')
+    inspection: document.querySelector('#inspection'),
+    embeddings: document.querySelector('#embeddings'),
   }
   const app = new App(document.body, els);
   window.app = app; //debug
@@ -221,5 +220,244 @@ export async function main(deps) {
     if (!model || !generalization) return;
 
     await inspect(generalization, model, els.inspection, deps);
+
+    const baseEl = document.createElement('div');
+    baseEl.classList.add('Projector');
+    els.embeddings.appendChild(baseEl);
+    const trainedEl = document.createElement('div');
+    trainedEl.classList.add('Projector');
+    els.embeddings.appendChild(trainedEl);
+    await embeddings(model, generalization, baseEl, trainedEl);
   });
 }
+
+
+// This is dependent on how the TM image model
+// is constructed by the training process.  It's
+// two layers - a truncated MobileNet to get embeddings,
+// with a smaller trained model on top.  That trained
+// model has two layers itself - a dense layer and a softmax
+// layer.
+//
+// So we get the trained model first, then within
+// there we apply the second-to-last layer to get
+// embeddings.
+//
+// In other words, take the last sofmax layer off
+// the last layer.
+function infer(tmImageModel, raster) {
+  const tfModel = tmImageModel.model;
+  const seq = tf.sequential();
+  seq.add(_.first(tfModel.layers)); // mobilenet
+  seq.add(_.first(_.last(tfModel.layers).layers)); // dense layer, without softmax
+  return seq.predict(capture(raster));
+}
+
+function inferMobileNet(tmImageModel, raster) {
+  const tfModel = tmImageModel.model;
+  const seq = tf.sequential();
+  seq.add(_.first(tfModel.layers)); // mobilenet embeddings only
+  return seq.predict(capture(raster));
+}
+
+// copied
+function capture(rasterElement) {
+    return tf.tidy(() => {
+        const pixels = tf.browser.fromPixels(rasterElement);
+
+        // crop the image so we're using the center square
+        const cropped = cropTensor(pixels);
+
+        // Expand the outer most dimension so we have a batch size of 1
+        const batchedImage = cropped.expandDims(0);
+
+        // Normalize the image between -1 and a1. The image comes in between 0-255
+        // so we divide by 127 and subtract 1.
+        return batchedImage.toFloat().div(tf.scalar(127)).sub(tf.scalar(1));
+    });
+}
+
+// copied
+function cropTensor(img) {
+    const size = Math.min(img.shape[0], img.shape[1]);
+    const centerHeight = img.shape[0] / 2;
+    const beginHeight = centerHeight - (size / 2);
+    const centerWidth = img.shape[1] / 2;
+    const beginWidth = centerWidth - (size / 2);
+    return img.slice([beginHeight, beginWidth, 0], [size, size, 3]);
+}
+
+
+async function embeddings(model, generalization, baseEl, trainedEl) {
+  debug('Starting embeddings...');
+  const examples = await mapExamples(generalization, async (className, blobUrl, index) => {
+    return {className, blobUrl, index};
+  });
+  const embeddingsList = await mapExamples(generalization, async (className, blobUrl, index) => {
+    const imgEl = document.createElement('img');
+    await setImageSrc(imgEl, blobUrl);
+    return (await infer(model, imgEl)).dataSync();
+  });
+  const baseEmbeddingsList = await mapExamples(generalization, async (className, blobUrl, index) => {
+    const imgEl = document.createElement('img');
+    await setImageSrc(imgEl, blobUrl);
+    return (await inferMobileNet(model, imgEl)).dataSync();
+  });
+
+  //localStorage.setItem('examples', JSON.stringify(examples));localStorage.setItem('embeddingsList', JSON.stringify(embeddingsList));
+  window.useProjector = useProjector;
+  window.baseEmbeddingsList = baseEmbeddingsList;
+  window.embeddingsList = embeddingsList;
+  window.examples = examples;
+
+  debug('Projecting with UMAP...');
+  // projectWithUmap(el, embeddingsList);
+  useProjector(baseEl, baseEmbeddingsList, examples);
+  useProjector(trainedEl, embeddingsList, examples);
+  
+  
+  debug('Done.');
+}
+
+async function forEachExample(project, asyncFn) {
+  mapExamples(project, async (className, blobUrl, index) => {
+    await asyncFn(className, blobUrl, index);
+    return undefined;
+  });
+  return undefined;
+}
+
+async function mapExamples(project, asyncFn) {
+  const classNames = Object.keys(project.filesByClassName);
+  let mapped = [];
+  for (var i = 0; i < classNames.length; i++) {
+    let className = classNames[i];
+    let imageBlobUrls = project.filesByClassName[className] || [];
+    for (var j = 0; j < imageBlobUrls.length; j++) {
+      let value = await asyncFn(className, imageBlobUrls[j], j);
+      mapped.push(value);
+    }
+  }
+  return mapped;
+}
+
+
+
+
+// needs more than n=15 by default
+async function projectWithUmap(el, embeddingsList) {
+  console.log('projectWithUmap', embeddingsList.length);
+  const umap = new UMAP();
+  console.log('fitting', umap);
+  const xys = await umap.fitAsync(embeddingsList);
+  console.log('xys', xys);
+  const xDomain = [_.min(xys.map(xy => xy[0])), _.max(xys.map(xy => xy[0]))];
+  const yDomain = [_.min(xys.map(xy => xy[1])), _.max(xys.map(xy => xy[1]))];
+  console.log('xDomain', xDomain);
+  console.log('yDomain', yDomain);
+  
+  var xScale = d3.scaleLinear()
+      .domain(xDomain)
+      .range([ 0, 800 ]);
+  var yScale = d3.scaleLinear()
+      .domain(yDomain)
+      .range([ 0, 600 ]);
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('width', 800);
+  svg.setAttribute('height', 600);
+  svg.style.width = '800px';
+  svg.style.height = '600px';
+  
+  console.log('projected', xys.map(xy => [xScale(xy[0]), yScale(xy[1])]));
+  xys.forEach((xy, index) => {
+    const [x, y] = xy;
+    const circle = document.createElementNS(ns, 'circle');
+    circle.setAttribute('cx', xScale(x));
+    circle.setAttribute('cy', yScale(y));
+    circle.setAttribute('r', 5);
+    const i = Math.round(index / xys.length * 16);
+    circle.setAttribute('fill', `#ff${i.toString(16)}`); // rgb didn't work, even in web inspector? confused, but working around...
+    svg.appendChild(circle);
+  });
+  el.appendChild(svg);
+}
+
+
+async function useProjector(el, embeddingsList, examples) {
+  debug('useProjector');
+  const umap = new UMAP();
+  debug('  fitting...');
+  const xys = await umap.fitAsync(embeddingsList);
+  debug('  rendering...');
+  //  window.xys = xys;
+  //  localStorage.setItem('xys', JSON.stringify(xys));
+  // console.log('xys', xys);
+
+  const messageEl = document.createElement('div');
+  messageEl.classList.add('Projector-message');
+  el.appendChild(messageEl);
+  // data.projection.forEach((vector, index) => {
+  //   const labelIndex = data.labels[index];
+  //   dataPoints.push(vector);
+  //   metadata.push({
+  //     labelIndex,
+  //     label: data.labelNames[labelIndex],
+  //   });
+  // });
+  const metadata = xys.map(i => {
+    return {i};
+  });
+  const dataset = new ScatterGL.Dataset(xys, metadata);
+  const scatterGL = new ScatterGL(el, {
+    onHover: (index) => {
+      if (index === null) {
+        messageEl.style.color = '#ccc';
+        return;
+      } else {
+        messageEl.style.color = '#333';
+        messageEl.textContent = JSON.stringify({
+          xys: xys[index],
+          example: examples[index]
+        });
+      }
+    },
+    onSelect: (points) => {
+      let message = '';
+      if (points.length === 0 && lastSelectedPoints.length === 0) {
+        message = '🔥 no selection';
+      } else if (points.length === 0 && lastSelectedPoints.length > 0) {
+        message = '🔥 deselected';
+      } else if (points.length === 1) {
+        message = `🔥 selected ${points}`;
+      } else {
+        message = `🔥selected ${points.length} points`;
+      }
+      messageEl.textContent = message;
+    },
+    renderMode: 'POINT'
+  });
+
+  // coloring, tied to number of classes
+  const labels = _.uniq(examples.map(ex => ex.className)).sort();
+  const CLASSES_COUNT = labels.length;
+  const hues = [...new Array(CLASSES_COUNT)].map((_, i) => Math.floor((255 / CLASSES_COUNT) * i));
+  const transparentColorsByLabel = hues.map(hue => `hsla(${hue}, 100%, 50%, 0.75)`);
+  const opaqueColorsByLabel = hues.map(hue => `hsla(${hue}, 100%, 50%, 1)`);
+  scatterGL.setPointColorer(i => {
+    const labelIndex = labels.indexOf(examples[i].className);
+    // transparentColorsByLabel[labelIndex];
+    return transparentColorsByLabel[labelIndex]
+  });
+
+  // dataset.setSpriteMetadata({
+  //   spriteImage: 'spritesheet.png',
+  //   singleSpriteSize: [28, 28],
+  // });
+  // scatterGL.setSpriteRenderMode();
+  scatterGL.render(dataset);
+}
+
+
+
+

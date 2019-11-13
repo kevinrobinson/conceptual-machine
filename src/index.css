@@ -9,7 +9,7 @@
 }
 
 .InspectExample {
-  margin: 20px;
+  margin: 10px;
   padding: 20px;
   border: 1px solid #f8f8f8;
 }
@@ -25,4 +25,21 @@
 
 .InspectExample-prediction-does-match {
   background: rgba(0, 255, 0, 0.2);
+}
+
+.Projector {
+  position: relative;
+  display: inline-block;
+  width: 600px;
+  height: 400px;
+  outline: 1px solid #ccc;
+  margin: 20px;
+  padding: 10px;
+}
+
+.Projector-message {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 10px;
 }

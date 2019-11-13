@@ -7,8 +7,14 @@
 <body>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.3/dist/teachablemachine-image.min.js"></script>
+  
   <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.15/lodash.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.2.2/dist/jszip.min.js"></script>
+
+  <script src="https://unpkg.com/umap-js@1.2.2/lib/umap-js.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.106.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/scatter-gl@0.0.1/lib/scatter-gl.min.js"></script>
+  <script src="https://d3js.org/d3.v4.js"></script>
 
   <h1>inspectable-machine</h1>
   <div>
@@ -32,6 +38,7 @@
     <h2>inspector</h2>
     <button id="inspect-button">inspect!</button>
     <div id="inspection"></div>
+    <div id="embeddings"></div>
   </div>
 
   <div id="log"></div>

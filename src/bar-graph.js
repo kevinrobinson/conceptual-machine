@@ -8,7 +8,6 @@ let lightColors = ['#FFECE2', '#FFE9EC', '#F1F0FF', '#E2F5FF'];
 export async function create(graphWrapper, labels, predictions) {
     let bars = {};
     labels.forEach((label, index) => makeBar(graphWrapper, bars, label, index));
-    console.log('bars', bars);
     updateBarGraph(bars, predictions);
 
     return updateBarGraph.bind(null, bars);
