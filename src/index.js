@@ -40,6 +40,7 @@ class App {
     // buttons
     const canAnalyze = (generalization && model);
     this.els.embeddingsButton.disabled = !canAnalyze;
+    this.els.embeddings3DButton.disabled = !canAnalyze;
     this.els.inspectButton.disabled = !canAnalyze;
   }
 }
@@ -208,6 +209,7 @@ export async function main(deps) {
     inspectButton: document.querySelector('#inspect-button'),
     inspection: document.querySelector('#inspection'),
     embeddingsButton: document.querySelector('#embeddings-button'),
+    embeddings3DButton: document.querySelector('#embeddings-3d-button'),
     embeddings: document.querySelector('#embeddings'),
   }
   const app = new App(document.body, els);
@@ -254,7 +256,22 @@ export async function main(deps) {
     const {model, generalization} = app.readState();
     if (!model || !generalization) return;
     els.embeddings.textContent = 'working...';
-    await embeddings(generalization, model, els.embeddings);
+    await embeddings(generalization, model, els.embeddings, {
+      umap: { nComponents: 2 }, 
+      sprites: false,
+      color: true
+    });
+  });
+
+  els.embeddings3DButton.addEventListener('click', async e => {
+    const {model, generalization} = app.readState();
+    if (!model || !generalization) return;
+    els.embeddings.textContent = 'working...';
+    await embeddings(generalization, model, els.embeddings, {
+      umap: { nComponents: 3 }, 
+      sprites: true,
+      color: false
+    });
   });
 }
 
@@ -342,7 +359,7 @@ function cropTensor(img) {
 }
 
 
-async function embeddings(generalization, model, el) {
+async function embeddings(generalization, model, el, options = {}) {
   // clear, show waiting
   el.innerHTML = '';
   const waitingEl = document.createElement('div');
@@ -406,18 +423,21 @@ async function embeddings(generalization, model, el) {
   });
 
   // base, trained
-  const prng = new Prando(RANDOM_SEED)
+  const prng = new Prando(RANDOM_SEED);
   const random = () => prng.next();
-  const options = {
+  // order of merging matters here
+  const projectorOptions = {
+    sprites: false,
+    color: true,
+    ...options,
     umap: {
       random, // fix seed for determinism
-      nComponents: 2 // to change to 3d
+      nComponents: 2,
+      ...(options.umap || {})
     }, 
-    sprites: false,
-    color: true
   };
-  useProjector(baseEl, baseEmbeddingsList, examples, {...options, title: 'Embeddings from MobileNet'});
-  useProjector(trainedEl, embeddingsList, examples, {...options, title: 'Embeddings from your model'});
+  useProjector(baseEl, baseEmbeddingsList, examples, {...projectorOptions, title: 'Embeddings from MobileNet'});
+  useProjector(trainedEl, embeddingsList, examples, {...projectorOptions, title: 'Embeddings from your model'});
 
   // show movement in same (fake) space
   const showMovement = false;
@@ -533,7 +553,6 @@ async function useProjector(el, embeddingsList, examples, options = {}) {
     const SPRITE_SHEET_SIZE = 64;
     const spriteSheetImgEl = await createSpriteSheetForScatterplot(sprites, SPRITE_SHEET_SIZE, SPRITE_SHEET_SIZE, {opacity: 0.5});
      console.log('spriteSheetImgEl', spriteSheetImgEl);
-     document.body.appendChild(spriteSheetImgEl);
     dataset.setSpriteMetadata({
       spriteImage: spriteSheetImgEl,
       singleSpriteSize: [SPRITE_SHEET_SIZE, SPRITE_SHEET_SIZE],

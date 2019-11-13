@@ -59,7 +59,7 @@
       <div class="Panel">
         <div class="Panel-content">
           <h2>2. Generalization dataset</h2>
-          <div class="Panel-text">Next, load a<a target="_blank" href="https://teachablemachine.withgoogle.com/train/image">Teachable Machine</a> project that contains different images than what the model was trained on, but labeled with the same class names.</div>
+          <div class="Panel-text">Next, load a project from <a target="_blank" href="https://teachablemachine.withgoogle.com/train/image">Teachable Machine</a> that contains different images than what the model was trained on, but labeled with the same class names.</div>
         </div>
         <div class="Panel-actions">
           <div class="Status" id="generalization-status"></div>
@@ -84,11 +84,12 @@
       <div class="Panel">
         <div class="Panel-content">
           <h2>3. Visualize!</h2>
-          <div class="Panel-text">Now you can visualize how well the model did on the generalization set.  You can scan through individual classification errors, or compare how the images appear in <a href="https://github.com/tensorflow/tfjs-models/tree/master/mobilenet" target="_blank">MobileNet</a> embedding space versus your model's embedding space.</div>
+          <div class="Panel-text">Now you can visualize how well the model did on the generalization set.<br/><br/>Scan through individual classification errors, or compare how the images appear in the <a href="https://github.com/tensorflow/tfjs-models/tree/master/mobilenet" target="_blank">MobileNet</a> embedding space versus your model's embedding space.</div>
         </div>
         <div class="Panel-actions">
           <button disabled="disabled" style="display: inline-block;" id="inspect-button" class="Button">Browse accuracy</button>
           <button disabled="disabled" style="margin-top: 10px; display: inline-block;" id="embeddings-button" class="Button">Visualize embedding space</button>
+          <button disabled="disabled" style="margin-top: 10px; display: inline-block;" id="embeddings-3d-button" class="Button">Visualize embeddings in 3D</button>
         </div>
       </div>
     </div>
