@@ -372,7 +372,7 @@ async function embeddings(generalization, model, el, options = {}) {
     const imgEl = document.createElement('img');
     await setImageSrc(imgEl, blobUrl);
     const predictions = await model.predict(imgEl);
-    return {className, blobUrl, index, predictions};
+    return {className, index, predictions, blobUrl};
   });
   const embeddingsList = await mapExamples(generalization, async (className, blobUrl, index) => {
     const imgEl = document.createElement('img');
@@ -530,12 +530,17 @@ async function useProjector(el, embeddingsList, examples, options = {}) {
   // reshape for scatterplot
   // metadata is for `showLabelsOnHover`
   const metadata = examples.map((example, i) => {
-    return {
-      // p: example.prediction.probability,
-      // label: example.className
-      // label: example.prediction.probability
-      label: `${i}  ${Math.round(100*example.predictions[0].probability)}% ${example.predictions[0].className}`
-    };
+      const generalizationClassName = examples[i].className;
+      const prediction = _.last(_.sortBy(examples[i].predictions, 'probability'));
+      const predictedClassName = prediction.className;
+      const label = (generalizationClassName === predictedClassName)
+        ? `${Math.round(100*prediction.probability)}% ${example.predictions[0].className}`
+        : `${Math.round(100*prediction.probability)}% ${example.predictions[0].className} (mislabeled)`;
+    return {label};
+    // p: example.prediction.probability,
+    // label: example.className
+    // label: example.prediction.probability
+    // label: `${Math.round(100*example.predictions[0].probability)}% ${example.predictions[0].className}`
   });
   const dataset = new ScatterGL.Dataset(xys, metadata);
 
@@ -561,33 +566,27 @@ async function useProjector(el, embeddingsList, examples, options = {}) {
   }
 
 
-  // hover message
+  // layout
+  const titleEl = document.createElement('h2');
+  titleEl.textContent = options.title || 'UMAP projection';
+  el.appendChild(titleEl);
+  const containerEl = document.createElement('div');
+  containerEl.classList.add('Projector-content');
+  el.appendChild(containerEl);
   const messageEl = document.createElement('div');
   messageEl.classList.add('Projector-message');
   el.appendChild(messageEl);
 
-  const titleEl = document.createElement('h2');
-  titleEl.textContent = options.title || 'UMAP projection';
-  el.appendChild(titleEl);
-
   // config
-  const containerEl = document.createElement('div');
-  containerEl.classList.add('Projector-content');
-  el.appendChild(containerEl);
   const scatterGL = new ScatterGL(containerEl, {
     // renderMode: (dataset.spriteMetadata) ? 'SPRITE' : 'POINT',
-    // onHover: (index) => {
-    //   if (index === null) {
-    //     messageEl.style.color = '#ccc';
-    //     return;
-    //   } else {
-    //     messageEl.style.color = '#333';
-    //     messageEl.textContent = JSON.stringify({
-    //       xys: xys[index],
-    //       example: examples[index]
-    //     });
-    //   }
-    // },
+    onHover: (index) => {
+      const d = (index === null ) ? null :{
+        example: examples[index],
+        xy: xys[index]
+      };
+      renderHoverMessage(messageEl, d);
+    },
     showLabelsOnHover: true, // requires `label` metadata
     selectEnabled: false,
     rotateOnStart: false
@@ -652,6 +651,7 @@ async function useProjector(el, embeddingsList, examples, options = {}) {
 
   // actual render
   scatterGL.render(dataset);
+  messageEl.innerHTML = '<div class="Hover" />Hover to see more</div>';
 
   // seems to have to come after, maybe a bug?
   if (dataset.spriteMetadata) {
@@ -697,4 +697,29 @@ async function createSpriteSheetForScatterplot(items, width, height, options = {
   img.height = canvas.height;
   img.src = uri;
   return img;
+}
+
+function renderHoverMessage(el, data) {
+  const {xys, example} = data;
+  const {blobUrl, className, index} = example;
+  const id = [className, index].join('-');
+
+  // don't destroy on hover out
+  if (data === null) {
+    el.style.opacity = 0.5;
+  }
+  el.innerHTML = `
+    <div class="Hover">
+      <div><img class="Hover-img" width="224" height="224" /></div>
+      <div class="Hover-info">
+        <div class="Hover-id"></div>
+        <pre class="Hover-debug"></pre>
+      </div>
+    </div>
+  `;
+  el.style.opacity = 1.0;
+  el.querySelector('.Hover-img').src = blobUrl;
+  el.querySelector('.Hover-id').textContent = `id: ${id}`;
+  el.querySelector('.Hover-debug').textContent = JSON.stringify(data, null, 2);
+  return;
 }

@@ -1,5 +1,8 @@
+  body, svg {
+    font-family: "Benton Sans", "Helvetica Neue", helvetica, arial, sans-serif;
+  }
+
 body {
-  font-family: "Benton Sans", "Helvetica Neue", helvetica, arial, sans-serif;
   max-width: 1200px;
   background: #E8EAED;
   margin: 20px;
@@ -93,6 +96,7 @@ h2 {
   margin: 20px;
   padding: 20px;
   background: white;
+  vertical-align: top;
 }
 
 .Projector-content {
@@ -102,10 +106,7 @@ h2 {
 }
 
 .Projector-message {
-  position: absolute;
-  top: 0;
-  left: 0;
-  padding: 10px;
+  width: 450px;
 }
 
 
@@ -179,6 +180,21 @@ h2 {
 
 
 
+.Hover {
+  display: flex;
+  height: 250px;
+  border-top: 1px solid #dedede;
+  padding-top: 10px;
+  font-size: 12px;
+}
+
+.Hover-info {
+  padding: 10px;
+  overflow: scroll;
+}
+
+
+
 /* from https://github.com/kevinrobinson/agreeable-pisces/blob/master/style.css */
 .File {
   display: inline-block;
@@ -237,3 +253,5 @@ h2 {
   margin-right: 10px;
   cursor: pointer;
 }*/
+
+
