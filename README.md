@@ -1,4 +1,4 @@
-# inspectable-machine
+# questionable-machine
 just early hacking so far
 
 # notes

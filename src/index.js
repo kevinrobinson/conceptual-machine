@@ -1,7 +1,10 @@
 // console.log('dependencies', {JSZip, _, tmImage, UMAP, ScatterGL});
+// shim
+const seedrandom = Math.seedrandom;
 
 const RANDOM_SEED = 42;
 console.log('RANDOM_SEED', RANDOM_SEED);
+
 
 class App {
   constructor(el, els) {
@@ -707,3 +710,291 @@ export async function main(deps) {
     await tcav(model, training, concepts, els.workspace, deps);
   });
 }
+
+
+async function trainCavModel(tmImageModel, conceptUris, randomUris) {
+  // activations, make sure weights are frozen?  TM doesn't seem to have to do this
+  const tfModel = tmImageModel.model;
+  const activationModel = tf.sequential();
+  activationModel.add(_.first(tfModel.layers)); // mobilenet
+  activationModel.add(_.first(_.last(tfModel.layers).layers)); // dense layer, without softmax
+  const embeddingOutputShape = [null, 100];
+  // const inputShape = truncatedModel.outputs[0].shape.slice(1); // [ null, 1280]
+  // const inputSize = tf.util.sizeFromShape([null,]);
+
+  // ...
+
+  // // put them together, not sure why this is necessary; isn't this the same as
+  // above?  maybe that implicitly freezes weights or something, just guessing.
+  // const jointModel = tf.sequential();
+  // jointModel.add(activationModel);
+  // jointModel.add(conceptModel);
+  // this.model = jointModel;
+  // return seq.predict(capture(raster));
+
+  return conceptModel;
+}
+
+
+// takes output of convertToTfDataset, a map with train and test activations.
+async function trainConceptClassifier(trainDataset, validationDataset) {
+  const embeddingOutputShape = [null, 100]; // from TM image model
+  const trainingParams = {
+    epochs: 50,
+    batchSize: 32,
+    learningRate: 0.01,
+    denseUnits: 100
+  };
+
+  // in case we need to use a seed for predictable training
+  const seed = 3.14; // from TM
+  const varianceScaling = (seed)
+    ? tf.initializers.varianceScaling({seed})
+    : tf.initializers.varianceScaling({});
+  const conceptModel = tf.sequential({
+    layers: [
+      tf.layers.dense({
+        inputShape: embeddingOutputShape,
+        units: trainingParams.denseUnits,
+        activation: 'relu',
+        kernelInitializer: varianceScaling,
+        useBias: true
+      }),
+      tf.layers.dense({
+        kernelInitializer: varianceScaling,
+        useBias: false,
+        activation: 'softmax',
+        units: 2 // concept / not-concept
+      })
+    ]
+  });
+
+  console.log('  create conceptModel:', conceptModel);
+  const optimizer = tf.train.adam(trainingParams.learningRate);
+  conceptModel.compile({
+    optimizer,
+    loss: 'binaryCrossentropy',
+    // loss: 'categoricalCrossentropy',
+    metrics: ['accuracy']
+  });
+
+  // actually train
+  /// conceptUris, randomUris > train / validation
+  console.log('  starting to fit...');
+  const trainingData = trainDataset.batch(trainingParams.batchSize);
+  const validationData = validationDataset.batch(trainingParams.batchSize);
+  const history = await conceptModel.fitDataset(trainingData, {
+      epochs: trainingParams.epochs,
+      validationData
+      // callbacks
+  });
+
+  return {conceptModel, history};
+}
+
+
+// `examples`` is [[Array, Array, ...], [Array, Array, ...]]
+// so list of classes, then the list of examples in that class.
+// these should be concretized activations, not Tensor objects.
+// ultimately returns two `tf.data dataset` objects.
+/**
+ * Process the examples by first shuffling randomly per class, then adding
+ * one-hot labels, then splitting into training/validation datsets, and finally
+ * sorting one last time
+ */
+function convertToTfDataset(examples) {
+  // TM code expects seed to be a seedrandom fn
+  const seed = seedrandom(RANDOM_SEED);
+  const validationFraction = 0.15;
+  const nClasses = examples.length;
+
+  // first shuffle each class individually
+  for (let i = 0; i < examples.length; i++) {
+    examples[i] = fisherYates(examples[i], seed);
+  }
+  console.log('sorted', examples);
+
+  // then break into validation and test datasets
+  let trainDataset = [];
+  let validationDataset = [];
+
+  // for each class, add samples to train and validation dataset
+  for (let i = 0; i < examples.length; i++) {
+    console.log('examples[i], i:', i);
+    const y = flatOneHot(i, nClasses);
+
+    const nExamplesInClass = examples[i].length;
+    const numValidation = Math.ceil(validationFraction * nExamplesInClass);
+    const numTrain = nExamplesInClass - numValidation;
+
+    console.log('  nExamplesInClass', nExamplesInClass);
+    console.log('  numValidation', numValidation);
+    console.log('  numTrain', numTrain);
+
+    const classTrain = examples[i].slice(0, numTrain).map((dataArray) => {
+        return { data: dataArray, label: y };
+    });
+    console.log('  classTrain', classTrain);
+    const classValidation = examples[i].slice(numTrain).map((dataArray) => {
+        return { data: dataArray, label: y };
+    });
+    console.log('  classValidation', classValidation);
+
+    trainDataset = trainDataset.concat(classTrain);
+    validationDataset = validationDataset.concat(classValidation);
+  }
+
+  // finally shuffle both train and validation datasets
+  trainDataset = fisherYates(trainDataset, seed);
+  validationDataset = fisherYates(validationDataset, seed);
+
+  const trainX = tf.data.array(trainDataset.map(sample => sample.data));
+  const validationX = tf.data.array(validationDataset.map(sample => sample.data));
+  const trainY = tf.data.array(trainDataset.map(sample => sample.label));
+  const validationY = tf.data.array(validationDataset.map(sample => sample.label));
+
+  // return tf.data dataset objects
+  console.log('  returning tf.data datasets');
+  return {
+    trainDataset: tf.data.zip({ xs: trainX,  ys: trainY}),
+    validationDataset: tf.data.zip({ xs: validationX,  ys: validationY})
+  };
+}
+
+// note: seed is a function!
+/**
+ * Shuffle an array of Float32Array or Samples using Fisher-Yates algorithm
+ * Takes an optional seed value to make shuffling predictable
+ */
+function fisherYates(array, seed) {
+  const length = array.length;
+
+  // need to clone array or we'd be editing original as we goo
+  const shuffled = array.slice();
+
+  for (let i = (length - 1); i > 0; i -= 1) {
+      let randomIndex ;
+      if (seed) {
+          randomIndex = Math.floor(seed() * (i + 1));
+      }
+      else {
+          randomIndex = Math.floor(Math.random() * (i + 1));
+      }
+
+      [shuffled[i], shuffled[randomIndex]] = [shuffled[randomIndex],shuffled[i]];
+  }
+
+  return shuffled;
+}
+
+function flatOneHot(label, numClasses) {
+  const labelOneHot = new Array(numClasses).fill(0);
+  labelOneHot[label] = 1;
+  return labelOneHot;
+}
+
+
+async function tcav(model, training, concepts, el, deps) {
+  // "we derive CAVs by training a linear classifier between a concept’s examples and random counter examples"
+  // for each concept...
+  // grab random noise
+  const noiseConceptClassName = 'random_dog';
+  const conceptClassNames = Object.keys(concepts.filesByClassName)
+    .filter(className => className !== noiseConceptClassName)
+    .slice(0, 1); // hacking!
+
+  console.log('conceptClassNames', conceptClassNames);
+
+  const noiseActivations = await getActivations(model, concepts.filesByClassName[noiseConceptClassName]);
+  console.log('noiseActivations', noiseActivations);
+
+  // for loop over each concept, because async/await
+  for (var i = 0; i < conceptClassNames.length; i++) {
+    // get activations
+    let conceptClassName = conceptClassNames[i];
+    let imageBlobUrls = concepts.filesByClassName[conceptClassName] || [];
+    let conceptActivations = await getActivations(model, imageBlobUrls);
+
+    console.log('conceptActivations', conceptClassName, conceptActivations);
+
+    // 1. prep dataset for concept
+    let ds = convertToTfDataset([conceptActivations, noiseActivations]);
+    console.log('ds', ds);
+
+    // 2. create model, using embeddings from tmModel
+    let {conceptModel, history} await trainConceptClassifier(ds.trainDataset, ds.validationDataset)
+    console.log('conceptModel', conceptModel);
+    console.log('history', history);
+
+    // "and then taking the vector orthogonal to the decision boundary"
+    // ??? 
+
+  } // end concept
+
+  console.log('done');
+}
+
+// return concrete data
+async function getActivations(tmImageModel, uris) {
+  let activations = [];
+  for (var j = 0; j < uris.length; j++) {
+    let imgEl = document.createElement('img');
+    await setImageSrc(imgEl, uris[j]);
+    let activation = (await infer(tmImageModel, imgEl)).dataSync();
+    activations.push(activation);
+  }
+  return activations;
+}
+
+
+
+/*
+async function setImageSrc(imgEl, src) {
+  await new Promise((resolve, reject) => {
+    imgEl.onload = resolve;
+    imgEl.onerror = reject;
+    imgEl.src = src;
+  });
+}
+function infer(tmImageModel, raster) {
+  const tfModel = tmImageModel.model;
+  const seq = tf.sequential();
+  seq.add(_.first(tfModel.layers)); // mobilenet
+  seq.add(_.first(_.last(tfModel.layers).layers)); // dense layer, without softmax
+  return seq.predict(capture(raster));
+}
+function capture(rasterElement) {
+    return tf.tidy(() => {
+        const pixels = tf.browser.fromPixels(rasterElement);
+
+        // crop the image so we're using the center square
+        const cropped = cropTensor(pixels);
+
+        // Expand the outer most dimension so we have a batch size of 1
+        const batchedImage = cropped.expandDims(0);
+
+        // Normalize the image between -1 and a1. The image comes in between 0-255
+        // so we divide by 127 and subtract 1.
+        return batchedImage.toFloat().div(tf.scalar(127)).sub(tf.scalar(1));
+    });
+}
+// copied
+function cropTensor(img) {
+    const size = Math.min(img.shape[0], img.shape[1]);
+    const centerHeight = img.shape[0] / 2;
+    const beginHeight = centerHeight - (size / 2);
+    const centerWidth = img.shape[1] / 2;
+    const beginWidth = centerWidth - (size / 2);
+    return img.slice([beginHeight, beginWidth, 0], [size, size, 3]);
+}
+
+
+model = app.readState().model;
+training = app.readState().training;
+concepts = app.readState().concepts;
+el = document.querySelector('.Workspace');
+deps = {}
+
+
+out = (await tcav(model, training, concepts, el, deps));
+*/
