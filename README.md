@@ -17,6 +17,17 @@ just early hacking so far
 ### these animals are not very shiba
 ![these animals are not very shiba](docs/docs-4.png)
 
+### huh, the scottish terrier concept seems weird...
+![huh, the scottish terrier concept seems weird](docs/docs-a-0.png)
+
+### how does the model do on pictures of terriers?
+![how does the model do on pictures of terriers](docs/docs-a-1.png)
+![how does the model do on pictures of terriers](docs/docs-a-2.png)
+![how does the model do on pictures of terriers](docs/docs-a-3.png)
+
+### woah guess it is pretty biased
+...
+
 
 ## datasets
 ### oxford pets
