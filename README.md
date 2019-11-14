@@ -21,6 +21,7 @@ just early hacking so far
 ![huh, the scottish terrier concept seems weird](docs/docs-a-0.png)
 
 ### how does the model do on pictures of terriers?
+let's look over in [warping-machine](https://github.com/kevinrobinson/warping-machine):
 ![how does the model do on pictures of terriers](docs/docs-a-1.png)
 ![how does the model do on pictures of terriers](docs/docs-a-2.png)
 ![how does the model do on pictures of terriers](docs/docs-a-3.png)
