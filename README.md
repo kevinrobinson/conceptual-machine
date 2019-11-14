@@ -8,14 +8,16 @@ just early hacking so far
 ### flow
 ![flow](docs/docs-1.png)
 
-### debugging log
-![debugging log](docs/docs-2.png)
+### debugging log for nerds
+![debugging log for nerds](docs/docs-2.png)
 
-### concept activations projected with umap, colored by concept classification
-![concept activations projected with umap, colored by concept classification](docs/docs-3.png)
+### these animals are cute but not very shiba...
+(concept activations projected with umap, colored by concept classification)
+![these animals are cute but not very shiba...](docs/docs-3.png)
 
-### these animals are not very shiba
-![these animals are not very shiba](docs/docs-4.png)
+### these ones are moar shiba
+![these ones are moar shiba](docs/docs-4.png)
+
 
 ### huh, the scottish terrier concept seems weird...
 ![huh, the scottish terrier concept seems weird](docs/docs-a-0.png)
