@@ -17,6 +17,9 @@ just early hacking so far
 ### 3d sprites are ooooh, but confusing
 ![3d sprites are ooooh, but confusing](docs/docs-5.png)
 
+### facets is better for exploring
+![facets is better for exploring](docs/docs-6.png)
+
 
 ## datasets
 ### oxford pets

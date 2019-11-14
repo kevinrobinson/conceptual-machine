@@ -150,6 +150,11 @@ h2 {
   vertical-align: middle;
 }
 
+.ButtonList .Button {
+  margin-top: 10px;
+  display: inline-block;
+}
+
 .ExampleLink {
   margin-left: 15px;
   vertical-align: middle;

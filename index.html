@@ -20,7 +20,25 @@
   <script src="https://cdn.jsdelivr.net/npm/scatter-gl@0.0.1/lib/scatter-gl.min.js"></script>
   <script src="https://d3js.org/d3.v4.js"></script>
 
- <script>
+  <!-- hash64 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.9-1/crypto-js.min.js"></script>
+
+  <!-- facets, polymer glue code -->
+  <!-- polymer, for facets, see https://github.com/PAIR-code/what-if-tool/issues/7#issuecomment-514660444 -->
+  <script>
+    window.addEventListener('WebComponentsReady', function() {
+      var link = document.createElement('link');
+      link.rel = "import";
+      link.href = "./src/facets-jupyter.html";
+      link.onload = function() {
+        console.log('> facets tag loaded');
+      };
+      document.head.appendChild(link);
+    });
+  </script>
+  <script src="./src/webcomponents-lite.js"></script>
+
+  <script>
     window.module = {exports: {}}; // hack for prando umd not working
   </script>
   <script src="https://unpkg.com/prando@5.1.1/dist/Prando.umd.js"></script>
@@ -86,27 +104,29 @@
           <h2>3. Visualize!</h2>
           <div class="Panel-text">Now you can visualize how well the model did on the generalization set.<br/><br/>Scan through individual classification errors, or compare how the images appear in <a href="https://github.com/tensorflow/tfjs-models/tree/master/mobilenet" target="_blank">MobileNet</a> embedding space versus your model's embedding space.</div>
         </div>
-        <div class="Panel-actions">
-          <button disabled="disabled" style="display: inline-block;" id="inspect-button" class="Button">Browse accuracy</button>
-          <button disabled="disabled" style="margin-top: 10px; display: inline-block;" id="embeddings-button" class="Button">Visualize embedding space</button>
-          <button disabled="disabled" style="margin-top: 10px; display: inline-block;" id="embeddings-3d-button" class="Button">Visualize embeddings in 3D</button>
+        <div class="Panel-actions ButtonList">
+          <button disabled="disabled" id="inspect-button" class="Button">Browse accuracy</button>
+          <button disabled="disabled"id="embeddings-button" class="Button">Visualize embedding space</button>
+          <button disabled="disabled" id="embeddings-3d-button" class="Button">Visualize embeddings in 3D</button>
+          <button disabled="disabled" id="facets-button" class="Button">Explore with Facets Dive</button>
         </div>
       </div>
     </div>
     
     <div>
+      <div class="Workspace" id="workspace"></div>
       <div id="generalization-preview"></div>
-      <div class="Workspace" id="inspection"></div>
-      <div class="Workspace" id="embeddings"></div>
     </div>
-    
 
     <div id="log"></div>
   </div>
+
   <script type="module">
     import {create} from './src/bar-graph.js';
+    import {facets} from './src/facets.js';
     import {main} from './src/index.js';
     main({
+      facets: facets,
       createBarGraph: create
     });
   </script>

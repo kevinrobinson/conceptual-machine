@@ -42,6 +42,7 @@ class App {
     this.els.embeddingsButton.disabled = !canAnalyze;
     this.els.embeddings3DButton.disabled = !canAnalyze;
     this.els.inspectButton.disabled = !canAnalyze;
+    this.els.facetsButton.disabled = !canAnalyze;
   }
 }
 
@@ -197,83 +198,6 @@ async function inspect(generalization, model, inspectorEl, deps) {
   }));
 }
 
-
-export async function main(deps) {
-  const els = {
-    modelZipInput: document.querySelector('#upload-model-zip-input'),
-    modelStatus: document.querySelector('#model-status'),
-    generalizationStatus: document.querySelector('#generalization-status'),
-    generalizationZipInput: document.querySelector('#upload-generalization-zip-input'),
-    generalizationPreview: document.querySelector('#generalization-preview'),
-    log: document.querySelector('#log'),
-    inspectButton: document.querySelector('#inspect-button'),
-    inspection: document.querySelector('#inspection'),
-    embeddingsButton: document.querySelector('#embeddings-button'),
-    embeddings3DButton: document.querySelector('#embeddings-3d-button'),
-    embeddings: document.querySelector('#embeddings'),
-  }
-  const app = new App(document.body, els);
-  window.app = app; //debug
-  app.render();
-
-
-  els.modelZipInput.addEventListener('change', async e => {
-    if (e.target.files.length === 0) return;
-    els.modelStatus.textContent = 'loading...';
-    const [modelZip] = e.target.files;
-    const model = await loadImageModelFromZipFile(modelZip);
-    app.update({model});
-  });
-
-  els.generalizationZipInput.addEventListener('change', async e => {
-    if (e.target.files.length === 0) return;
-    els.generalizationStatus.textContent = 'loading...';
-    const [projectZip] = e.target.files;
-    const generalization = await loadImageProjectFromZipFile(projectZip);
-    app.update({generalization});
-
-    const previewGeneralizationImages = false;
-    if (previewGeneralizationImages) {
-      els.generalizationPreview.innerHTML = '';
-      await mapExamples(generalization, async (className, blobUrl, index) => {
-        const imgEl = document.createElement('img');
-        imgEl.src = blobUrl;
-        imgEl.width = 224/4;
-        imgEl.height = 224/4;
-        els.generalizationPreview.appendChild(imgEl);
-      });
-    }
-  });
-
-  els.inspectButton.addEventListener('click', async e => {
-    const {model, generalization} = app.readState();
-    if (!model || !generalization) return;
-    els.inspection.textContent = 'working...';
-    await inspect(generalization, model, els.inspection, deps);
-  });
-
-  els.embeddingsButton.addEventListener('click', async e => {
-    const {model, generalization} = app.readState();
-    if (!model || !generalization) return;
-    els.embeddings.textContent = 'working...';
-    await embeddings(generalization, model, els.embeddings, {
-      umap: { nComponents: 2 }, 
-      sprites: false,
-      color: true
-    });
-  });
-
-  els.embeddings3DButton.addEventListener('click', async e => {
-    const {model, generalization} = app.readState();
-    if (!model || !generalization) return;
-    els.embeddings.textContent = 'working...';
-    await embeddings(generalization, model, els.embeddings, {
-      umap: { nComponents: 3 }, 
-      sprites: true,
-      color: false
-    });
-  });
-}
 
 
 // This is dependent on how the TM image model
@@ -722,4 +646,109 @@ function renderHoverMessage(el, data) {
   el.querySelector('.Hover-id').textContent = `id: ${id}`;
   el.querySelector('.Hover-debug').textContent = JSON.stringify(data, null, 2);
   return;
+}
+
+
+function addWaitingEl(el) {
+  const waitingEl = document.createElement('div');
+  waitingEl.classList.add('Status');
+  waitingEl.textContent = 'working...'
+  el.appendChild(waitingEl);
+  return () => el.removeChild(waitingEl);
+}
+
+
+export async function main(deps) {
+  const els = {
+    modelZipInput: document.querySelector('#upload-model-zip-input'),
+    modelStatus: document.querySelector('#model-status'),
+
+    generalizationStatus: document.querySelector('#generalization-status'),
+    generalizationZipInput: document.querySelector('#upload-generalization-zip-input'),
+    generalizationPreview: document.querySelector('#generalization-preview'),
+
+    inspectButton: document.querySelector('#inspect-button'),
+    embeddingsButton: document.querySelector('#embeddings-button'),
+    embeddings3DButton: document.querySelector('#embeddings-3d-button'),
+    facetsButton: document.querySelector('#facets-button'),
+
+    workspace: document.querySelector('#workspace'),
+    log: document.querySelector('#log')
+  }
+  const app = new App(document.body, els);
+  window.app = app; //debug
+  app.render();
+
+
+  els.modelZipInput.addEventListener('change', async e => {
+    if (e.target.files.length === 0) return;
+    els.modelStatus.textContent = 'loading...';
+    const [modelZip] = e.target.files;
+    const model = await loadImageModelFromZipFile(modelZip);
+    app.update({model});
+  });
+
+  els.generalizationZipInput.addEventListener('change', async e => {
+    if (e.target.files.length === 0) return;
+    els.generalizationStatus.textContent = 'loading...';
+    const [projectZip] = e.target.files;
+    const generalization = await loadImageProjectFromZipFile(projectZip);
+    app.update({generalization});
+
+    const previewGeneralizationImages = false;
+    if (previewGeneralizationImages) {
+      els.generalizationPreview.innerHTML = '';
+      await mapExamples(generalization, async (className, blobUrl, index) => {
+        const imgEl = document.createElement('img');
+        imgEl.src = blobUrl;
+        imgEl.width = 224/4;
+        imgEl.height = 224/4;
+        els.generalizationPreview.appendChild(imgEl);
+      });
+    }
+  });
+
+  els.inspectButton.addEventListener('click', async e => {
+    const {model, generalization} = app.readState();
+    if (!model || !generalization) return;
+    els.workspace.textContent = 'working...';
+    await inspect(generalization, model, els.workspace, deps);
+  });
+
+  els.embeddingsButton.addEventListener('click', async e => {
+    const {model, generalization} = app.readState();
+    if (!model || !generalization) return;
+    els.workspace.textContent = 'working...';
+    await embeddings(generalization, model, els.workspace, {
+      umap: { nComponents: 2 }, 
+      sprites: false,
+      color: true
+    });
+  });
+
+  els.embeddings3DButton.addEventListener('click', async e => {
+    const {model, generalization} = app.readState();
+    if (!model || !generalization) return;
+    els.workspace.textContent = 'working...';
+    await embeddings(generalization, model, els.workspace, {
+      umap: { nComponents: 3 }, 
+      sprites: true,
+      color: false
+    });
+  });
+
+  els.facetsButton.addEventListener('click', async e => {
+    const {model, generalization} = app.readState();
+    if (!model || !generalization) return;
+
+    const examples = await mapExamples(generalization, async (className, blobUrl, index) => {
+      const imgEl = document.createElement('img');
+      await setImageSrc(imgEl, blobUrl);
+      const predictions = await model.predict(imgEl);
+      return {className, index, predictions, blobUrl};
+    });
+    const done = addWaitingEl(els.workspace);
+    await deps.facets(els.workspace, examples);
+    done();
+  });
 }
