@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-  <title>warping-machine</title>
+  <title>conceptual-machine</title>
   <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -21,7 +21,7 @@
   <script src="https://d3js.org/d3.v4.js"></script>
 
   <!-- for training, TM style -->
-  <script src="https://unpkg.com/browse/seedrandom@3.0.5/seedrandom.min.js"></script>
+  <script src="https://unpkg.com/seedrandom@3.0.5/seedrandom.min.js"></script>
 
   <!-- hash64 -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.9-1/crypto-js.min.js"></script>
@@ -48,7 +48,7 @@
 
   <div>
     <div style="margin: 10px; border-radius: 10px; box-shadow: 0px 2px 2px rgba(0,0,0,0.20); background: rgb(229,119, 1); padding: 20px;">
-      <h1><a href="/">questionable-machine</a></h1>
+      <h1><a href="/">conceptual-machine</a></h1>
     </div>
 
     <div class="VerticalSection" style="display: flex; flex-direction: row;">
@@ -104,7 +104,7 @@
       <div class="Panel">
         <div class="Panel-content">
           <h2>3. Concepts dataset</h2>
-          <div class="Panel-text">Next, load a project from <a target="_blank" href="https://teachablemachine.withgoogle.com/train/image">Teachable Machine</a> that labels concepts where you want to explore bias in your model.</div>
+          <div class="Panel-text">Next, load a project from <a target="_blank" href="https://teachablemachine.withgoogle.com/train/image">Teachable Machine</a> that labels concepts where you want to explore bias in your model, and a `random` class as well.</div>
         </div>
         <div class="Panel-actions">
           <div class="Status" id="concepts-status"></div>
@@ -129,19 +129,24 @@
       <div class="Panel">
         <div class="Panel-content">
           <h2>4. tcav!</h2>
-          <div class="Panel-text">...</div>
+          <div class="Panel-text">
+            still experimenting...
+            <div><img src="img/diagram.png" width="100%"/></div>
+            <div><a href="https://arxiv.org/pdf/1711.11279.pdf">paper</a></div>
+            <div><a href="https://github.com/tensorflow/tcav">code</a></div>
+          </div>
         </div>
         <div class="Panel-actions ButtonList">
-          <button disabled="disabled" id="tcav-button" class="Button">go</button>
+          <button disabled="disabled" id="tcav-button" class="Button">Explore concepts</button>
         </div>
       </div>
     </div>
     
+    <div id="log"></div>
+
     <div>
       <div class="Workspace" id="workspace"></div>
     </div>
-
-    <div id="log"></div>
   </div>
 
   <script type="module">

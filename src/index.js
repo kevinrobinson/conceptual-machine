@@ -59,6 +59,16 @@ async function setImageSrc(imgEl, src) {
   });
 }
 
+async function imageFromUri(src) {
+  const imgEl = document.createElement('img');
+  await new Promise((resolve, reject) => {
+    imgEl.onload = resolve;
+    imgEl.onerror = reject;
+    imgEl.src = src;
+  });
+  return imgEl;
+}
+
 async function readBlobFromZip(zip, filename) {
   let zipEntry = null;
   zip.forEach((relativePath, entry) => {
@@ -466,6 +476,12 @@ async function useProjector(el, embeddingsList, examples, options = {}) {
     // label: example.prediction.probability
     // label: `${Math.round(100*example.predictions[0].probability)}% ${example.predictions[0].className}`
   });
+
+  return await projectScatterplot(el, xys, metadata, options);
+}
+
+async function projectScatterplot(el, xys, metadata, options = {}) {
+  console.log('projectScatterplot', el, xys, metadata, options);
   const dataset = new ScatterGL.Dataset(xys, metadata);
 
    // window.xys = xys;
@@ -476,7 +492,7 @@ async function useProjector(el, embeddingsList, examples, options = {}) {
   
   // create spritesheet and attach to dataset
   if (options.sprites) {
-    const sprites = examples.map(example => {
+    const sprites = metadata.map(example => {
       return {uri: example.blobUrl}
     });
     const SPRITE_SHEET_SIZE = 64;
@@ -505,9 +521,8 @@ async function useProjector(el, embeddingsList, examples, options = {}) {
   const scatterGL = new ScatterGL(containerEl, {
     // renderMode: (dataset.spriteMetadata) ? 'SPRITE' : 'POINT',
     onHover: (index) => {
-      const d = (index === null ) ? null :{
-        example: examples[index],
-        xy: xys[index]
+      const d = (index === null ) ? null : {
+        meta: metadata[index]
       };
       renderHoverMessage(messageEl, d);
     },
@@ -530,13 +545,28 @@ async function useProjector(el, embeddingsList, examples, options = {}) {
   });
 
   // coloring, tied to number of classes
+  if (options.simpleColor) {
+    scatterGL.setPointColorer(i => {
+      const predictions = metadata[i].predictions;
+      if (!predictions) return '#333';
+
+      const prediction = _.last(_.sortBy(predictions, 'probability'));
+      const classIndex = predictions.indexOf(prediction);
+      // const nClasses = predictions.length;
+      // const hues = [...new Array(nClasses)].map((_, i) => Math.floor((255 / nClasses) * classIndex));
+      // const colorsByLabel = hues.map(hue => `hsl(${hue}, 100%, 50%)`);
+      // const colorsByLabel = ['#f59322', '#0877bd'];
+      const colorsByLabel = ['rgb(0, 105, 92)', '#f59322'];
+      return colorsByLabel[classIndex];
+    });
+  }
   if (options.color) {
     // highlight midlines
     scatterGL.setPointColorer(i => {
       // truth, predicted
       // if (i >= examples.length) return '#999'; // grid
-      const generalizationClassName = examples[i].className;
-      const prediction = _.last(_.sortBy(examples[i].predictions, 'probability'));
+      const generalizationClassName = metadata[i].className;
+      const prediction = _.last(_.sortBy(metadata[i].predictions, 'probability'));
       const predictedClassName = prediction.className;
       const hue = (generalizationClassName === predictedClassName) ? 120 : 0;
 
@@ -572,7 +602,7 @@ async function useProjector(el, embeddingsList, examples, options = {}) {
 
   // dimensions
   scatterGL.setDimensions((options.umap || {}).nComponents || 2);
-
+  console.log('  rendering...');
   // actual render
   scatterGL.render(dataset);
   messageEl.innerHTML = '<div class="Hover" />Hover to see more</div>';
@@ -624,14 +654,14 @@ async function createSpriteSheetForScatterplot(items, width, height, options = {
 }
 
 function renderHoverMessage(el, data) {
-  const {xys, example} = data;
-  const {blobUrl, className, index} = example;
-  const id = [className, index].join('-');
-
   // don't destroy on hover out
   if (data === null) {
     el.style.opacity = 0.5;
+    return;
   }
+
+  const {meta} = data;
+  const {uri} = meta;
   el.innerHTML = `
     <div class="Hover">
       <div><img class="Hover-img" width="224" height="224" /></div>
@@ -642,9 +672,9 @@ function renderHoverMessage(el, data) {
     </div>
   `;
   el.style.opacity = 1.0;
-  el.querySelector('.Hover-img').src = blobUrl;
-  el.querySelector('.Hover-id').textContent = `id: ${id}`;
-  el.querySelector('.Hover-debug').textContent = JSON.stringify(data, null, 2);
+  el.querySelector('.Hover-img').src = uri;
+  // el.querySelector('.Hover-id').textContent = `id: ${id}`;
+  el.querySelector('.Hover-debug').textContent = JSON.stringify(meta, null, 2);
   return;
 }
 
@@ -706,91 +736,12 @@ export async function main(deps) {
   els.tcavButton.addEventListener('click', async e => {
     const {training, model, concepts} = app.readState();
     if (!training || !model || !concepts) return;
-    els.workspace.textContent = 'working...';
+    const done = addWaitingEl(els.workspace);
     await tcav(model, training, concepts, els.workspace, deps);
+    done();
   });
 }
 
-
-async function trainCavModel(tmImageModel, conceptUris, randomUris) {
-  // activations, make sure weights are frozen?  TM doesn't seem to have to do this
-  const tfModel = tmImageModel.model;
-  const activationModel = tf.sequential();
-  activationModel.add(_.first(tfModel.layers)); // mobilenet
-  activationModel.add(_.first(_.last(tfModel.layers).layers)); // dense layer, without softmax
-  const embeddingOutputShape = [null, 100];
-  // const inputShape = truncatedModel.outputs[0].shape.slice(1); // [ null, 1280]
-  // const inputSize = tf.util.sizeFromShape([null,]);
-
-  // ...
-
-  // // put them together, not sure why this is necessary; isn't this the same as
-  // above?  maybe that implicitly freezes weights or something, just guessing.
-  // const jointModel = tf.sequential();
-  // jointModel.add(activationModel);
-  // jointModel.add(conceptModel);
-  // this.model = jointModel;
-  // return seq.predict(capture(raster));
-
-  return conceptModel;
-}
-
-
-// takes output of convertToTfDataset, a map with train and test activations.
-async function trainConceptClassifier(trainDataset, validationDataset) {
-  const embeddingOutputShape = [null, 100]; // from TM image model
-  const trainingParams = {
-    epochs: 50,
-    batchSize: 32,
-    learningRate: 0.01,
-    denseUnits: 100
-  };
-
-  // in case we need to use a seed for predictable training
-  const seed = 3.14; // from TM
-  const varianceScaling = (seed)
-    ? tf.initializers.varianceScaling({seed})
-    : tf.initializers.varianceScaling({});
-  const conceptModel = tf.sequential({
-    layers: [
-      tf.layers.dense({
-        inputShape: embeddingOutputShape,
-        units: trainingParams.denseUnits,
-        activation: 'relu',
-        kernelInitializer: varianceScaling,
-        useBias: true
-      }),
-      tf.layers.dense({
-        kernelInitializer: varianceScaling,
-        useBias: false,
-        activation: 'softmax',
-        units: 2 // concept / not-concept
-      })
-    ]
-  });
-
-  console.log('  create conceptModel:', conceptModel);
-  const optimizer = tf.train.adam(trainingParams.learningRate);
-  conceptModel.compile({
-    optimizer,
-    loss: 'binaryCrossentropy',
-    // loss: 'categoricalCrossentropy',
-    metrics: ['accuracy']
-  });
-
-  // actually train
-  /// conceptUris, randomUris > train / validation
-  console.log('  starting to fit...');
-  const trainingData = trainDataset.batch(trainingParams.batchSize);
-  const validationData = validationDataset.batch(trainingParams.batchSize);
-  const history = await conceptModel.fitDataset(trainingData, {
-      epochs: trainingParams.epochs,
-      validationData
-      // callbacks
-  });
-
-  return {conceptModel, history};
-}
 
 
 // `examples`` is [[Array, Array, ...], [Array, Array, ...]]
@@ -812,7 +763,7 @@ function convertToTfDataset(examples) {
   for (let i = 0; i < examples.length; i++) {
     examples[i] = fisherYates(examples[i], seed);
   }
-  console.log('sorted', examples);
+  loudLog('sorted', examples);
 
   // then break into validation and test datasets
   let trainDataset = [];
@@ -820,25 +771,25 @@ function convertToTfDataset(examples) {
 
   // for each class, add samples to train and validation dataset
   for (let i = 0; i < examples.length; i++) {
-    console.log('examples[i], i:', i);
+    loudLog('examples[i], i:', i);
     const y = flatOneHot(i, nClasses);
 
     const nExamplesInClass = examples[i].length;
     const numValidation = Math.ceil(validationFraction * nExamplesInClass);
     const numTrain = nExamplesInClass - numValidation;
 
-    console.log('  nExamplesInClass', nExamplesInClass);
-    console.log('  numValidation', numValidation);
-    console.log('  numTrain', numTrain);
+    loudLog('  nExamplesInClass', nExamplesInClass);
+    loudLog('  numValidation', numValidation);
+    loudLog('  numTrain', numTrain);
 
     const classTrain = examples[i].slice(0, numTrain).map((dataArray) => {
         return { data: dataArray, label: y };
     });
-    console.log('  classTrain', classTrain);
+    loudLog('  classTrain', classTrain);
     const classValidation = examples[i].slice(numTrain).map((dataArray) => {
         return { data: dataArray, label: y };
     });
-    console.log('  classValidation', classValidation);
+    loudLog('  classValidation', classValidation);
 
     trainDataset = trainDataset.concat(classTrain);
     validationDataset = validationDataset.concat(classValidation);
@@ -854,7 +805,7 @@ function convertToTfDataset(examples) {
   const validationY = tf.data.array(validationDataset.map(sample => sample.label));
 
   // return tf.data dataset objects
-  console.log('  returning tf.data datasets');
+  loudLog('  returning tf.data datasets');
   return {
     trainDataset: tf.data.zip({ xs: trainX,  ys: trainY}),
     validationDataset: tf.data.zip({ xs: validationX,  ys: validationY})
@@ -894,44 +845,256 @@ function flatOneHot(label, numClasses) {
 }
 
 
+
+// takes output of convertToTfDataset, a map with train and test activations.
+// this is the classifier; not the concept activation model
+// it takes embeddings from the image model, and outputs binary classification of
+// concept/not-concept.
+async function trainConceptClassifier(trainDataset, validationDataset, options = {}) {
+  const embeddingOutputShape = [100]; // from TM image model
+  const trainingParams = {
+    epochs: 50,
+    batchSize: 32,
+    learningRate: 0.01,
+    denseUnits: 100
+  };
+
+  // in case we need to use a seed for predictable training
+  const seed = 3.14; // from TM
+  const varianceScaling = (seed)
+    ? tf.initializers.varianceScaling({seed})
+    : tf.initializers.varianceScaling({});
+  const conceptClassifier = tf.sequential({
+    layers: [
+      tf.layers.dense({
+        inputShape: embeddingOutputShape,
+        units: trainingParams.denseUnits,
+        activation: 'relu',
+        kernelInitializer: varianceScaling,
+        useBias: true
+      }),
+      tf.layers.dense({
+        kernelInitializer: varianceScaling,
+        useBias: false,
+        activation: 'softmax',
+        units: 2 // concept / not-concept
+      })
+    ]
+  });
+
+  loudLog('  create conceptClassifier:', conceptClassifier);
+  const optimizer = tf.train.adam(trainingParams.learningRate);
+  conceptClassifier.compile({
+    optimizer,
+    loss: 'binaryCrossentropy', // i changed this from TM
+    // loss: 'categoricalCrossentropy', 
+    metrics: ['accuracy']
+  });
+
+  // actually train
+  /// conceptUris, randomUris > train / validation
+  loudLog('  starting to fit...');
+  const trainingData = trainDataset.batch(trainingParams.batchSize);
+  const validationData = validationDataset.batch(trainingParams.batchSize);
+  const history = await conceptClassifier.fitDataset(trainingData, {
+      epochs: trainingParams.epochs,
+      validationData,
+      callbacks: options.callbacks
+  });
+
+  return [conceptClassifier, history];
+}
+
+// This takes a concept classifier and an image model, then then gives a concept
+// activation model.
+async function getConceptActivationModel(tmImageModel, conceptClassifier) {
+  // img tensor > model activations
+  const tfModel = tmImageModel.model;
+  const toModelEmbeddings = tf.sequential();
+  toModelEmbeddings.add(_.first(tfModel.layers)); // mobilenet
+  toModelEmbeddings.add(_.first(_.last(tfModel.layers).layers)); // dense layer, without softmax
+
+  // model activations > concept activations
+  const toConceptActivations = tf.sequential();
+  toConceptActivations.add(_.first(conceptClassifier.layers)); // dense layer, without softmax
+
+  // stack together
+  const conceptActivationModel = tf.sequential();
+  conceptActivationModel.add(toModelEmbeddings);
+  conceptActivationModel.add(toConceptActivations);
+
+  return conceptActivationModel;
+}
+
+
 async function tcav(model, training, concepts, el, deps) {
   // "we derive CAVs by training a linear classifier between a concept’s examples and random counter examples"
   // for each concept...
   // grab random noise
-  const noiseConceptClassName = 'random_dog';
+  const noiseConceptClassName = 'random';
   const conceptClassNames = Object.keys(concepts.filesByClassName)
-    .filter(className => className !== noiseConceptClassName)
-    .slice(0, 1); // hacking!
+    .filter(className => className !== noiseConceptClassName);
+    // .slice(0, 1); // hacking!
 
-  console.log('conceptClassNames', conceptClassNames);
+  loudLog('conceptClassNames', conceptClassNames);
 
   const noiseActivations = await getActivations(model, concepts.filesByClassName[noiseConceptClassName]);
-  console.log('noiseActivations', noiseActivations);
+  loudLog('noiseActivations', noiseActivations);
 
   // for loop over each concept, because async/await
   for (var i = 0; i < conceptClassNames.length; i++) {
     // get activations
     let conceptClassName = conceptClassNames[i];
+    loudLog('  training this concept:', conceptClassName);
     let imageBlobUrls = concepts.filesByClassName[conceptClassName] || [];
     let conceptActivations = await getActivations(model, imageBlobUrls);
 
-    console.log('conceptActivations', conceptClassName, conceptActivations);
+    loudLog('  conceptActivations', conceptClassName, conceptActivations);
 
     // 1. prep dataset for concept
-    let ds = convertToTfDataset([conceptActivations, noiseActivations]);
-    console.log('ds', ds);
+    // in python... https://github.com/tensorflow/tcav/blob/master/tcav/cav.py#L123
+    //  # to make sure postiive and negative examples are balanced,
+    //  # truncate all examples to the size of the smallest concept.
+    let ds = convertToTfDataset([noiseActivations, conceptActivations]); // 0=noise, 1=concept
+    loudLog('  datasets', ds);
 
-    // 2. create model, using embeddings from tmModel
-    let {conceptModel, history} await trainConceptClassifier(ds.trainDataset, ds.validationDataset)
-    console.log('conceptModel', conceptModel);
-    console.log('history', history);
+    // 2. train concept model (model embeddings > concept classification)
+    // in python they just do a linear/logistic regression https://github.com/tensorflow/tcav/blob/master/tcav/cav.py#L169
+    // then the CAVs are the coefficients
+    // different than https://github.com/tensorflow/tcav/blob/master/tcav/cav.py#L234
+    loudLog('  fitting...');
+    let [conceptClassifier, history] = await trainConceptClassifier(ds.trainDataset, ds.validationDataset, {
+      callbacks: {
+        onYield(epoch, batch, logs) {
+          loudLog('  onYield(batch, epoch, loss)', batch, epoch, logs.loss);
+        },
+        // onEpochEnd(epoch, logs) {
+        //   loudLog('  onEpochEnd', logs.loss, logs);
+        // },
+        // onTrainEnd(logs) {
+        //   loudLog('  onTrainEnd', logs);
+        // }
+      }
+    });
+    loudLog('  done training model', conceptClassifier);
+    loudLog('  history:', history);
 
-    // "and then taking the vector orthogonal to the decision boundary"
-    // ??? 
+    // 3. create concept activation model (img > concept activation)
+    const conceptActivationModel = await getConceptActivationModel(model, conceptClassifier);
+    loudLog('  conceptActivationModel', conceptActivationModel);
+
+    // and get actual labels, for figuring out boundary
+    const conceptLabelsByTrainingClass = await getConceptLabels(model, conceptClassifier, conceptClassName, training);
+    loudLog('conceptLabelsByTrainingClass', conceptLabelsByTrainingClass);
+
+    // 4. bounce training data off concept activation model, grouped by class
+    // assume same capture/normalization as TM
+    // =========== TODO ===========
+    // shouldn't these be in model embedding space?
+    const conceptActivationsByTrainingClass = await getConceptActivations(conceptActivationModel, training);
+    loudLog('conceptActivationsByTrainingClass', conceptActivationsByTrainingClass);
+
+    // 4b. plot these on umap?
+    // project
+    Object.keys(conceptActivationsByTrainingClass).map(async trainingClass => {
+      loudLog('umap', trainingClass);
+      const prng = new Prando(RANDOM_SEED);
+      const random = () => prng.next();
+      const umap = new UMAP({
+        random, // fix seed for determinism
+        nComponents: 2
+      });
+
+      loudLog('  fitting...');
+      const conceptActivations = conceptActivationsByTrainingClass[trainingClass];
+      const xys = await umap.fitAsync(conceptActivations);
+      
+      loudLog('  projecting...');
+      const umapEl = document.createElement('div');
+      umapEl.classList.add('Projector');
+      umapEl.style.display = 'inline-block';
+      umapEl.style['vertical-align'] = 'top';
+      el.appendChild(umapEl);
+      
+      // order of merging matters here
+      const metadata = xys.map((xy, i) => {
+        const predictions = conceptLabelsByTrainingClass[trainingClass][i];
+        const uri = training.filesByClassName[trainingClass][i];
+        return {predictions, uri};
+      });
+      await projectScatterplot(umapEl, xys, metadata, {
+        sprites: false,
+        color: false,
+        simpleColor: true,
+        title: `"${conceptClassName}" concept activation for training class: ${trainingClass}`
+      });
+      console.log('projected', umapEl);
+      // conceptActivationsByTrainingClass
+      // const examples = await mapExamples(training, async (className, blobUrl, index) => {
+      //   await imageFromUri(blobUrl);
+      //   return {className, index, predictions, blobUrl};
+      // });
+      // useProjector(umapEl, conceptActivationsByTrainingClass.cat, examples, {...projectorOptions, title: 'Embeddings from MobileNet'});
+    });
+
+    // 5. "and then taking the vector orthogonal to the decision boundary"
+    // TODO
+
+    // 6. show CAVs per-class
+    // TODO
 
   } // end concept
 
-  console.log('done');
+  loudLog('done');
+}
+
+async function getConceptLabels(tmImageModel, conceptClassifier, conceptClassName, training) {
+  loudLog('getConceptLabels', tmImageModel, conceptClassifier, conceptClassName, training);
+  let byTrainingClass = {};
+  const trainingClassNames = Object.keys(training.filesByClassName)
+  for (var i = 0; i < trainingClassNames.length; i++) {
+    let trainingClassName = trainingClassNames[i];
+    loudLog('  for training concept:', trainingClassName);
+    let imageBlobUrls = training.filesByClassName[trainingClassName] || [];
+    for (var j = 0; j < imageBlobUrls.length; j++) {
+      // same capture/normalization as TM
+      window.DEBUG = [tmImageModel, conceptClassifier, imageBlobUrls[i]];
+      let imgEl = await imageFromUri(imageBlobUrls[j]);
+      let modelEmbedding = (await infer(tmImageModel, imgEl)).dataSync();
+      let modelTensor = tf.tensor([modelEmbedding]); // just reshaping for #predict API
+      let conceptPredictions = (await conceptClassifier.predict(modelTensor)).dataSync();
+      
+      // reshape predictions (0=noise, 1=concept)
+      let reshapedPredictions = [
+        { className: 'noise', probability: conceptPredictions[0] },
+        { className: conceptClassName, probability: conceptPredictions[1] },
+      ];
+      byTrainingClass[trainingClassName] || (byTrainingClass[trainingClassName] = []);
+      byTrainingClass[trainingClassName].push(reshapedPredictions);
+    }
+  }
+  return byTrainingClass;
+}
+
+async function getConceptActivations(conceptActivationModel, training) {
+  loudLog('getConceptActivations');
+  let byTrainingClass = {};
+  const trainingClassNames = Object.keys(training.filesByClassName)
+  for (var i = 0; i < trainingClassNames.length; i++) {
+    let trainingClassName = trainingClassNames[i];
+    loudLog('  for training concept:', trainingClassName);
+    let imageBlobUrls = training.filesByClassName[trainingClassName] || [];
+    for (var j = 0; j < imageBlobUrls.length; j++) {
+      // same capture/normalization as TM
+      let raster = await imageFromUri(imageBlobUrls[j]);
+      let tensor = capture(raster);
+      let conceptActivation = (await conceptActivationModel.predict(tensor)).dataSync();
+      
+      byTrainingClass[trainingClassName] || (byTrainingClass[trainingClassName] = []);
+      byTrainingClass[trainingClassName].push(conceptActivation);
+    }
+  }
+  return byTrainingClass;
 }
 
 // return concrete data
@@ -947,6 +1110,13 @@ async function getActivations(tmImageModel, uris) {
 }
 
 
+function loudLog(...params) {
+  console.log(...params);
+  const line = document.createElement('pre');
+  line.textContent = params.map(p => typeof p === 'string' ? p : JSON.stringify(p)).join('  ');
+  document.querySelector('#log').style.display = 'block';
+  document.querySelector('#log').appendChild(line);
+}
 
 /*
 async function setImageSrc(imgEl, src) {
@@ -997,4 +1167,16 @@ deps = {}
 
 
 out = (await tcav(model, training, concepts, el, deps));
+
+
+conceptModels[0].predict(capture(imageFromUri(app.readState().training.filesByClassName.cat[0])))
 */
+
+
+
+// debuggging
+window.imageFromUri = imageFromUri;
+window.infer = infer;
+window.capture = capture;
+window.cropTensor = cropTensor;
+
