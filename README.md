@@ -1,6 +1,11 @@
 # inspectable-machine
 just early hacking so far
 
+# notes
+"we derive CAVs by training a linear classifier between a concept’s examples and random counter examples and then taking the vector orthogonal to the decision boundary"
+- better: we provide random examples
+
+
 ## screenshots
 ### flow
 ![flow](docs/docs-1.png)
