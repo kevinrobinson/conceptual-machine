@@ -124,6 +124,11 @@ h2 {
   border-radius: 10px;
 }
 
+#visor-button {
+  display: none;
+  margin: 20px;
+}
+
 .VerticalSection {
   /*border: 1px solid #ccc;*/
   padding-top: 10px;

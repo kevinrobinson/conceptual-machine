@@ -11,6 +11,7 @@
 <body>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.3/dist/teachablemachine-image.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis"></script>
 
   <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.15/lodash.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.2.2/dist/jszip.min.js"></script>
@@ -19,6 +20,7 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.106.2/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/scatter-gl@0.0.1/lib/scatter-gl.min.js"></script>
   <script src="https://d3js.org/d3.v4.js"></script>
+
 
   <!-- for training, TM style -->
   <script src="https://unpkg.com/seedrandom@3.0.5/seedrandom.min.js"></script>
@@ -143,6 +145,9 @@
     </div>
     
     <div id="log"></div>
+    <div>
+      <div id="visor-button" class="Button">Show training metrics</div>
+    </div>
 
     <div>
       <div class="Workspace" id="workspace"></div>

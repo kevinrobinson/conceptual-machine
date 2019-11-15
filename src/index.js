@@ -5,6 +5,17 @@ const seedrandom = Math.seedrandom;
 const RANDOM_SEED = 42;
 console.log('RANDOM_SEED', RANDOM_SEED);
 
+function debug(...params) {
+  console.log(...params); // eslint-disable-line no-console
+}
+
+function loudLog(...params) {
+  console.log(...params);
+  const line = document.createElement('pre');
+  line.textContent = params.map(p => typeof p === 'string' ? p : JSON.stringify(p)).join('  ');
+  document.querySelector('#log').style.display = 'block';
+  document.querySelector('#log').appendChild(line);
+}
 
 class App {
   constructor(el, els) {
@@ -46,10 +57,6 @@ class App {
   }
 }
 
-
-function debug(...params) {
-  console.log(...params); // eslint-disable-line no-console
-}
 
 async function setImageSrc(imgEl, src) {
   await new Promise((resolve, reject) => {
@@ -702,7 +709,8 @@ export async function main(deps) {
     tcavButton: document.querySelector('#tcav-button'),
 
     workspace: document.querySelector('#workspace'),
-    log: document.querySelector('#log')
+    log: document.querySelector('#log'),
+    visorButton: document.querySelector('#visor-button')
   }
   const app = new App(document.body, els);
   window.app = app; //debug
@@ -733,6 +741,7 @@ export async function main(deps) {
     app.update({concepts});
   });
 
+  // els.visorButton.addEventListener('click', e => tfvis.visor());
   els.tcavButton.addEventListener('click', async e => {
     const {training, model, concepts} = app.readState();
     if (!training || !model || !concepts) return;
@@ -850,7 +859,7 @@ function flatOneHot(label, numClasses) {
 // this is the classifier; not the concept activation model
 // it takes embeddings from the image model, and outputs binary classification of
 // concept/not-concept.
-async function trainConceptClassifier(trainDataset, validationDataset, options = {}) {
+async function trainConceptClassifier(conceptClassName, trainDataset, validationDataset, options = {}) {
   const embeddingOutputShape = [100]; // from TM image model
   const trainingParams = {
     epochs: 50,
@@ -891,6 +900,18 @@ async function trainConceptClassifier(trainDataset, validationDataset, options =
     metrics: ['accuracy']
   });
 
+  // visualize training
+  const metrics = ['loss', 'val_loss']; // 'acc', 'val_acc'];
+  const container = {
+    name: 'Training',
+    tab: conceptClassName,
+    styles: {
+      height: '600px'
+    }
+  };
+  const {onEpochEnd} = tfvis.show.fitCallbacks(container, metrics);
+  // return train(model, data, callbacks);
+
   // actually train
   /// conceptUris, randomUris > train / validation
   loudLog('  starting to fit...');
@@ -899,31 +920,13 @@ async function trainConceptClassifier(trainDataset, validationDataset, options =
   const history = await conceptClassifier.fitDataset(trainingData, {
       epochs: trainingParams.epochs,
       validationData,
-      callbacks: options.callbacks
+      callbacks: {
+        onEpochEnd,
+        ...options.callbacks
+      }
   });
 
   return [conceptClassifier, history];
-}
-
-// This takes a concept classifier and an image model, then then gives a concept
-// activation model.
-async function getConceptActivationModel(tmImageModel, conceptClassifier) {
-  // img tensor > model activations
-  const tfModel = tmImageModel.model;
-  const toModelEmbeddings = tf.sequential();
-  toModelEmbeddings.add(_.first(tfModel.layers)); // mobilenet
-  toModelEmbeddings.add(_.first(_.last(tfModel.layers).layers)); // dense layer, without softmax
-
-  // model activations > concept activations
-  const toConceptActivations = tf.sequential();
-  toConceptActivations.add(_.first(conceptClassifier.layers)); // dense layer, without softmax
-
-  // stack together
-  const conceptActivationModel = tf.sequential();
-  conceptActivationModel.add(toModelEmbeddings);
-  conceptActivationModel.add(toConceptActivations);
-
-  return conceptActivationModel;
 }
 
 
@@ -963,40 +966,26 @@ async function tcav(model, training, concepts, el, deps) {
     // then the CAVs are the coefficients
     // different than https://github.com/tensorflow/tcav/blob/master/tcav/cav.py#L234
     loudLog('  fitting...');
-    let [conceptClassifier, history] = await trainConceptClassifier(ds.trainDataset, ds.validationDataset, {
+    tfvis.visor()
+    // visorButtonEl.style.display = 'inline-block';
+    let [conceptClassifier, history] = await trainConceptClassifier(conceptClassName, ds.trainDataset, ds.validationDataset, {
       callbacks: {
         onYield(epoch, batch, logs) {
           loudLog('  onYield(batch, epoch, loss)', batch, epoch, logs.loss);
-        },
-        // onEpochEnd(epoch, logs) {
-        //   loudLog('  onEpochEnd', logs.loss, logs);
-        // },
-        // onTrainEnd(logs) {
-        //   loudLog('  onTrainEnd', logs);
-        // }
+        }
       }
     });
     loudLog('  done training model', conceptClassifier);
     loudLog('  history:', history);
 
-    // 3. create concept activation model (img > concept activation)
-    const conceptActivationModel = await getConceptActivationModel(model, conceptClassifier);
-    loudLog('  conceptActivationModel', conceptActivationModel);
-
-    // and get actual labels, for figuring out boundary
-    const conceptLabelsByTrainingClass = await getConceptLabels(model, conceptClassifier, conceptClassName, training);
+    // 3. get activations and concept labels for training data
+    const {conceptLabelsByTrainingClass, activationsByTrainingClass} = await getActivationsAndConceptLabels(model, conceptClassifier, conceptClassName, training);
     loudLog('conceptLabelsByTrainingClass', conceptLabelsByTrainingClass);
-
-    // 4. bounce training data off concept activation model, grouped by class
-    // assume same capture/normalization as TM
-    // =========== TODO ===========
-    // shouldn't these be in model embedding space?
-    const conceptActivationsByTrainingClass = await getConceptActivations(conceptActivationModel, training);
-    loudLog('conceptActivationsByTrainingClass', conceptActivationsByTrainingClass);
+    loudLog('activationsByTrainingClass', activationsByTrainingClass);
 
     // 4b. plot these on umap?
     // project
-    Object.keys(conceptActivationsByTrainingClass).map(async trainingClass => {
+    Object.keys(activationsByTrainingClass).map(async trainingClass => {
       loudLog('umap', trainingClass);
       const prng = new Prando(RANDOM_SEED);
       const random = () => prng.next();
@@ -1006,8 +995,8 @@ async function tcav(model, training, concepts, el, deps) {
       });
 
       loudLog('  fitting...');
-      const conceptActivations = conceptActivationsByTrainingClass[trainingClass];
-      const xys = await umap.fitAsync(conceptActivations);
+      const activations = activationsByTrainingClass[trainingClass];
+      const xys = await umap.fitAsync(activations);
       
       loudLog('  projecting...');
       const umapEl = document.createElement('div');
@@ -1048,9 +1037,10 @@ async function tcav(model, training, concepts, el, deps) {
   loudLog('done');
 }
 
-async function getConceptLabels(tmImageModel, conceptClassifier, conceptClassName, training) {
-  loudLog('getConceptLabels', tmImageModel, conceptClassifier, conceptClassName, training);
-  let byTrainingClass = {};
+async function getActivationsAndConceptLabels(tmImageModel, conceptClassifier, conceptClassName, training) {
+  loudLog('getActivationsAndConceptLabels', tmImageModel, conceptClassifier, conceptClassName, training);
+  let conceptLabelsByTrainingClass = {};
+  let activationsByTrainingClass = {};
   const trainingClassNames = Object.keys(training.filesByClassName)
   for (var i = 0; i < trainingClassNames.length; i++) {
     let trainingClassName = trainingClassNames[i];
@@ -1058,10 +1048,11 @@ async function getConceptLabels(tmImageModel, conceptClassifier, conceptClassNam
     let imageBlobUrls = training.filesByClassName[trainingClassName] || [];
     for (var j = 0; j < imageBlobUrls.length; j++) {
       // same capture/normalization as TM
-      window.DEBUG = [tmImageModel, conceptClassifier, imageBlobUrls[i]];
-      let imgEl = await imageFromUri(imageBlobUrls[j]);
-      let modelEmbedding = (await infer(tmImageModel, imgEl)).dataSync();
-      let modelTensor = tf.tensor([modelEmbedding]); // just reshaping for #predict API
+      let modelActivation = await getActivation(tmImageModel, imageBlobUrls[j]);
+      activationsByTrainingClass[trainingClassName] || (activationsByTrainingClass[trainingClassName] = []);
+      activationsByTrainingClass[trainingClassName].push(modelActivation);
+
+      let modelTensor = tf.tensor([modelActivation]); // just reshaping for #predict API
       let conceptPredictions = (await conceptClassifier.predict(modelTensor)).dataSync();
       
       // reshape predictions (0=noise, 1=concept)
@@ -1069,95 +1060,30 @@ async function getConceptLabels(tmImageModel, conceptClassifier, conceptClassNam
         { className: 'noise', probability: conceptPredictions[0] },
         { className: conceptClassName, probability: conceptPredictions[1] },
       ];
-      byTrainingClass[trainingClassName] || (byTrainingClass[trainingClassName] = []);
-      byTrainingClass[trainingClassName].push(reshapedPredictions);
+      conceptLabelsByTrainingClass[trainingClassName] || (conceptLabelsByTrainingClass[trainingClassName] = []);
+      conceptLabelsByTrainingClass[trainingClassName].push(reshapedPredictions);
     }
   }
-  return byTrainingClass;
-}
-
-async function getConceptActivations(conceptActivationModel, training) {
-  loudLog('getConceptActivations');
-  let byTrainingClass = {};
-  const trainingClassNames = Object.keys(training.filesByClassName)
-  for (var i = 0; i < trainingClassNames.length; i++) {
-    let trainingClassName = trainingClassNames[i];
-    loudLog('  for training concept:', trainingClassName);
-    let imageBlobUrls = training.filesByClassName[trainingClassName] || [];
-    for (var j = 0; j < imageBlobUrls.length; j++) {
-      // same capture/normalization as TM
-      let raster = await imageFromUri(imageBlobUrls[j]);
-      let tensor = capture(raster);
-      let conceptActivation = (await conceptActivationModel.predict(tensor)).dataSync();
-      
-      byTrainingClass[trainingClassName] || (byTrainingClass[trainingClassName] = []);
-      byTrainingClass[trainingClassName].push(conceptActivation);
-    }
-  }
-  return byTrainingClass;
+  return {conceptLabelsByTrainingClass, activationsByTrainingClass};
 }
 
 // return concrete data
 async function getActivations(tmImageModel, uris) {
   let activations = [];
-  for (var j = 0; j < uris.length; j++) {
-    let imgEl = document.createElement('img');
-    await setImageSrc(imgEl, uris[j]);
-    let activation = (await infer(tmImageModel, imgEl)).dataSync();
+  for (var i = 0; i < uris.length; i++) {
+    let activation = await getActivation(tmImageModel, uris[i]);
     activations.push(activation);
   }
   return activations;
 }
 
-
-function loudLog(...params) {
-  console.log(...params);
-  const line = document.createElement('pre');
-  line.textContent = params.map(p => typeof p === 'string' ? p : JSON.stringify(p)).join('  ');
-  document.querySelector('#log').style.display = 'block';
-  document.querySelector('#log').appendChild(line);
+async function getActivation(tmImageModel, uri) {
+  const imgEl = await imageFromUri(uri);
+  const tensor = await infer(tmImageModel, imgEl);
+  return tensor.dataSync();
 }
 
 /*
-async function setImageSrc(imgEl, src) {
-  await new Promise((resolve, reject) => {
-    imgEl.onload = resolve;
-    imgEl.onerror = reject;
-    imgEl.src = src;
-  });
-}
-function infer(tmImageModel, raster) {
-  const tfModel = tmImageModel.model;
-  const seq = tf.sequential();
-  seq.add(_.first(tfModel.layers)); // mobilenet
-  seq.add(_.first(_.last(tfModel.layers).layers)); // dense layer, without softmax
-  return seq.predict(capture(raster));
-}
-function capture(rasterElement) {
-    return tf.tidy(() => {
-        const pixels = tf.browser.fromPixels(rasterElement);
-
-        // crop the image so we're using the center square
-        const cropped = cropTensor(pixels);
-
-        // Expand the outer most dimension so we have a batch size of 1
-        const batchedImage = cropped.expandDims(0);
-
-        // Normalize the image between -1 and a1. The image comes in between 0-255
-        // so we divide by 127 and subtract 1.
-        return batchedImage.toFloat().div(tf.scalar(127)).sub(tf.scalar(1));
-    });
-}
-// copied
-function cropTensor(img) {
-    const size = Math.min(img.shape[0], img.shape[1]);
-    const centerHeight = img.shape[0] / 2;
-    const beginHeight = centerHeight - (size / 2);
-    const centerWidth = img.shape[1] / 2;
-    const beginWidth = centerWidth - (size / 2);
-    return img.slice([beginHeight, beginWidth, 0], [size, size, 3]);
-}
-
 
 model = app.readState().model;
 training = app.readState().training;
@@ -1180,3 +1106,50 @@ window.infer = infer;
 window.capture = capture;
 window.cropTensor = cropTensor;
 
+
+
+/* ---- */
+const earlier = {
+  // This takes a concept classifier and an image model, then then gives a concept
+  // activation model.
+  async function getConceptActivationModel(tmImageModel, conceptClassifier) {
+    // img tensor > model activations
+    const tfModel = tmImageModel.model;
+    const toModelEmbeddings = tf.sequential();
+    toModelEmbeddings.add(_.first(tfModel.layers)); // mobilenet
+    toModelEmbeddings.add(_.first(_.last(tfModel.layers).layers)); // dense layer, without softmax
+
+    // model activations > concept activations
+    const toConceptActivations = tf.sequential();
+    toConceptActivations.add(_.first(conceptClassifier.layers)); // dense layer, without softmax
+
+    // stack together
+    const conceptActivationModel = tf.sequential();
+    conceptActivationModel.add(toModelEmbeddings);
+    conceptActivationModel.add(toConceptActivations);
+
+    return conceptActivationModel;
+  }
+
+
+  async function getConceptActivations(conceptActivationModel, training) {
+    loudLog('getConceptActivations');
+    let byTrainingClass = {};
+    const trainingClassNames = Object.keys(training.filesByClassName)
+    for (var i = 0; i < trainingClassNames.length; i++) {
+      let trainingClassName = trainingClassNames[i];
+      loudLog('  for training concept:', trainingClassName);
+      let imageBlobUrls = training.filesByClassName[trainingClassName] || [];
+      for (var j = 0; j < imageBlobUrls.length; j++) {
+        // same capture/normalization as TM
+        let raster = await imageFromUri(imageBlobUrls[j]);
+        let tensor = capture(raster);
+        let conceptActivation = (await conceptActivationModel.predict(tensor)).dataSync();
+
+        byTrainingClass[trainingClassName] || (byTrainingClass[trainingClassName] = []);
+        byTrainingClass[trainingClassName].push(conceptActivation);
+       }
+     }
+    return byTrainingClass;
+   }
+};

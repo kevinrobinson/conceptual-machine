@@ -3,6 +3,9 @@ just early hacking so far
 
 "we derive CAVs by training a linear classifier between a concept’s examples and random counter examples and then taking the vector orthogonal to the decision boundary"
 
+"a CAV encodes the direction of a concept in the vectorspace of a bottleneck"
+
+"compute cosine similarity between a set of picturesof interest to the CAV to sort the pictures"
 
 ## screenshots
 ### flow
