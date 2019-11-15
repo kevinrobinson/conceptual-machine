@@ -910,7 +910,6 @@ async function trainConceptClassifier(conceptClassName, trainDataset, validation
     }
   };
   const {onEpochEnd} = tfvis.show.fitCallbacks(container, metrics);
-  // return train(model, data, callbacks);
 
   // actually train
   /// conceptUris, randomUris > train / validation
@@ -921,7 +920,7 @@ async function trainConceptClassifier(conceptClassName, trainDataset, validation
       epochs: trainingParams.epochs,
       validationData,
       callbacks: {
-        // onEpochEnd,
+        onEpochEnd,
         ...options.callbacks
       }
   });
@@ -966,7 +965,7 @@ async function tcav(model, training, concepts, el, deps) {
     // then the CAVs are the coefficients
     // different than https://github.com/tensorflow/tcav/blob/master/tcav/cav.py#L234
     loudLog('  fitting...');
-    // tfvis.visor()
+    tfvis.visor()
     // visorButtonEl.style.display = 'inline-block';
     let [conceptClassifier, history] = await trainConceptClassifier(conceptClassName, ds.trainDataset, ds.validationDataset, {
       callbacks: {
