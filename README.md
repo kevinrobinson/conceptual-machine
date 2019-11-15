@@ -14,8 +14,11 @@ just early hacking so far
 ### debugging log for nerds
 ![debugging log for nerds](docs/docs-2.png)
 
+### watch the training (thanks tfvis!)
+![training](docs/docs-vis.png)
+
 ### these animals are cute but not very shiba...
-(concept activations projected with umap, colored by concept classification)
+(activations from concept classifier projected with umap, colored by concept classification)
 ![these animals are cute but not very shiba...](docs/docs-3.png)
 
 ### these ones are moar shiba
